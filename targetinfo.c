@@ -98,6 +98,7 @@ static Form_pg_proc      getProcFormByOid( Oid procOid, HeapTuple * tuple );
 static void 		     completeProcTarget( targetInfo * info, HeapTuple proctup );
 static char 		   * makeFullName( Oid schemaOID, char * targetName );
 static TupleDesc	  	 getResultTupleDesc( FunctionCallInfo fcinfo );
+static List            * parseNames(const char * string);
 
 PG_FUNCTION_INFO_V1( pldbg_get_target_info );		/* Get target name, argtypes, pkgOid, ...		*/
 
@@ -550,7 +551,7 @@ static Oid getProcOidByName(const char * pro_name_or_oid, char targetType )
 	 * Parse the name into components and see if it matches any
 	 * pg_proc entries in the current search path.
 	 */
-	names = stringToQualifiedNameList(pro_name_or_oid);
+	names = parseNames(pro_name_or_oid);
 	clist = FuncnameGetCandidates(names, -1);
 
 	if (clist == NULL)
@@ -668,14 +669,14 @@ static void parseNameAndArgTypes( const char *string, const char *caller, bool a
 	if (*ptr == '\0')
 	{
 		/* This is a function/name only, not a signature. */
-		*names = stringToQualifiedNameList(rawname);
+		*names = parseNames(rawname);
 		*nargs = -1;
 		return;
 	}
 
 	/* Separate the name and parse it into a list */
 	*ptr++ = '\0';
-	*names = stringToQualifiedNameList(rawname);
+	*names = parseNames(rawname);
 
 	/* Check for the trailing right parenthesis and remove it */
 	ptr2 = ptr + strlen(ptr);
@@ -808,4 +809,22 @@ static TupleDesc getResultTupleDesc( FunctionCallInfo fcinfo )
 						"that cannot accept type record")));
 	}
 	return( rsinfo->expectedDesc );
+}
+
+/*******************************************************************************
+ * parseNames()
+ *
+ *  This functions provides a version-neutral wrapper around the 
+ *  stringToQualifiedNameList() function.  The signature for 
+ *  stringToQualifiedNameList() changed between 8.2 and 8.3 - the second 
+ *  argument was never very valuable anyway.
+ */
+
+static List * parseNames( const char * string )
+{
+#if PG_VERSION_NUM >= 80300
+	return stringToQualifiedNameList(string);
+#else
+	return stringToQualifiedNameList(string, "parseNames");
+#endif
 }
