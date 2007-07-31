@@ -11,7 +11,6 @@ CREATE TYPE breakpoint AS ( func OID, linenumber INTEGER, targetName TEXT );
 CREATE TYPE frame      AS ( level INT, targetname TEXT, func OID, linenumber INTEGER, args TEXT );
 
 CREATE TYPE targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvector, targetName NAME, argModes "char"[], argNames TEXT[], targetLang OID, fqName TEXT, returnsSet BOOL, returnType OID );
-CREATE TYPE edbdbg.targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvector, targetName NAME, argModes "char"[], argNames TEXT[], targetLang OID, fqName TEXT, returnsSet BOOL, returnType OID, pkg OID, requiredArgs INT, isFunc BOOL, argDefVals TEXT[] );
 
 CREATE TYPE var		   AS ( name TEXT, varClass char, lineNumber INTEGER, isUnique bool, isConst bool, isNotNull bool, dtype OID, value TEXT );
 CREATE TYPE proxyInfo  AS ( serverVersionStr TEXT, serverVersionNum INT, proxyAPIVer INT, serverProcessID INT );
