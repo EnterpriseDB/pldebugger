@@ -120,6 +120,22 @@ pldbgapi$(DLSUFFIX):	pldbgapi.o plugin_debugger$(DLSUFFIX)
 endif
 
 ################################################################################
+##
+##  NOTE: On OS X (Darwin), we ignore undefined references in pldbgapi. These
+##                are actually in plugin_debugger.so and will be present at
+##                runtime. Someone with more ld/gcc foo than I may be able to
+##                figure out a nicer way of telling the linker these symbols
+##                really do exist!! -Dave.
+
+ifeq ($(PORTNAME), darwin)
+
+pldbgapi$(DLSUFFIX):    pldbgapi.o 
+	$(CC) $(CFLAGS) -bundle -undefined dynamic_lookup -o $@ $< $(BE_DLLLIBS)
+
+endif
+
+
+################################################################################
 ## Rules for making the profiler plugins
 ##
 ##
