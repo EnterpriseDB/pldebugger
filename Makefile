@@ -36,7 +36,7 @@ SHAREDLIBS      = pldbgapi targetinfo
 PLUGINS         = plugin_debugger # plugin_profiler plugin_tracer
 INSTALL_scripts = pldbgapi.sql
 
-subdir = contrib/debugger
+subdir       = contrib/debugger
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
@@ -47,7 +47,6 @@ SYMLINKCMD  = cp
 else
 SYMLINKCMD  = ln -s
 endif
-
 
 ifeq ($(PORTNAME), win32)
 override CFLAGS += $(CFLAGS_SL) -I$(top_builddir)/src/pl/plpgsql/src
@@ -94,6 +93,31 @@ clean:
 
 plugin_debugger$(DLSUFFIX): 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src
 
+################################################################################
+## Rules for making the pldbgapi
+##
+##   NOTE: On Windows, pldbgapi.dll must link against plugin_debugger.dll 
+##		   (because pldbgapi.dll needs the global breakpoint code defined 
+##		   in plugin_debugger.dll).  
+##
+##	 	   Ideally, we could just define a target-specific variable and 
+##		   an explicit pre-requisite to handle this:
+##			pldbgapi$(DLSUFFIX):  SHLIB_LINK += plugin_debugger$(DLSUFFIX)
+##		    pldbgapi$(DLSUFFIX):  plugin_debugger$(DLSUFFIX)
+##
+##		   But GNU Make propogates the target-specific variable to the 
+##		   the prerequisite which would force plugin_debugger.dll to 
+##		   link against itself
+##   
+
+ifeq ($(PORTNAME), win32)
+
+pldbgapi$(DLSUFFIX):	pldbgapi.o plugin_debugger$(DLSUFFIX)
+	$(DLLTOOL) --export-all --output-def $*.def $<
+	$(DLLWRAP) -o $@ --def $*.def $< $(SHLIB_LINK) plugin_debugger$(DLSUFFIX)
+	rm -r $*.def
+
+endif
 
 ################################################################################
 ## Rules for making the profiler plugins
