@@ -35,6 +35,7 @@
 SHAREDLIBS      = pldbgapi targetinfo
 PLUGINS         = plugin_debugger # plugin_profiler plugin_tracer
 INSTALL_scripts = pldbgapi.sql
+DOCS		= README.pldebugger
 
 subdir       = contrib/debugger
 top_builddir = ../..
