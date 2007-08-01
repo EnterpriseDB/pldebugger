@@ -130,8 +130,7 @@ endif
 
 ifeq ($(PORTNAME), darwin)
 
-pldbgapi$(DLSUFFIX):    pldbgapi.o 
-	$(CC) $(CFLAGS) -bundle -undefined dynamic_lookup -o $@ $< $(BE_DLLLIBS)
+pldbgapi$(DLSUFFIX):   CFLAGS += -undefined dynamic_lookup
 
 endif
 
