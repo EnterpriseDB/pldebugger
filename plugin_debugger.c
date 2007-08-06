@@ -699,7 +699,7 @@ static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const c
 		if(len != strlen(var_name)) 
 			continue;
 		
-		if(strncmp( var->refname, var_name, len) == 0 )
+		if( strncmp( var->refname, var_name, len) == 0 )
 		{
 		 	if(( lineno == -1 ) || ( var->lineno == lineno ))
 			{
@@ -2327,7 +2327,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 
 		/*
 		 * The PL compiler marks certain statements as 'invisible' to the
-		 * debugger. In particular, the compiiler may generate statements
+		 * debugger. In particular, the compiler may generate statements
 		 * that do not appear in the source code. Such a statement is
 		 * marked with a line number of -1: if we're looking at an invisible
 		 * statement, just return to the caller.
@@ -2403,6 +2403,19 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 		}
 
 		if( stmt->cmd_type == PLPGSQL_STMT_BLOCK )
+			return;
+
+		/*
+		 * The PL/pgSQL compiler inserts an automatic RETURN stat1ement at the
+		 * end of each function (unless the last statement in the function is
+		 * already a RETURN). If we run into that statement, we don't really
+		 * want to wait for the user to STEP across it. Remember, the user won't
+		 * see the RETURN statement in the source-code listing for his function.
+		 *
+		 * Fortunately, the automatic RETURN statement has a line-number of 0 
+		 * so it's easy to spot.
+		 */
+		if( stmt->lineno == 0 )
 			return;
 
 		/*
