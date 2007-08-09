@@ -1,0 +1,207 @@
+PostgreSQL PL/pgSQL Performance Profiler
+===============================================================================
+
+This module (plugin_profiler) implements a performance profiler for functions
+(and triggers) written in PL/pgSQL.
+
+It's still a little rough around the edges (particularly this README) and at
+the moment, it only works with PG 8.3 and above.  All feedback is welcome (you
+can find my contact information at the end of this README).
+
+The PL/pgSQL profiler is implemented as an instrumentation plugin - it does
+absolutely nothing unless you load it into your PG server (see the "Usage"
+section to learn how to load the plugin).  When the profiler is loaded into
+a backend, it intercepts every PL/pgSQL statement that you execute and writes
+performance information about each statement into a table of your choosing 
+(the profiler can also write performance information to an XML file of your 
+choosing, but that functionality is not yet complete and may never be).
+
+So what kind of information does the profiler provide?  For each statement,
+the profiler records:
+   * execution count (number of times each statement is executed)
+   * total execution time (how long did we spend executing each statement?)
+   * longest execution time (how long did the slowest iteration take?)
+   * number of scans (total number of sequential and indexed scans)
+   * blocks fetched
+   * blocks hit (blocks found in buffer pool)
+   * tuples returned
+   * tuples fetched 
+   * tuples inserted
+   * tuples updated
+   * tuples deleted
+
+As mentioned earlier, the profiler will record the performance counters in 
+a table of your choosing.  Here's a small sample (we ran a simple function and 
+recorded the performance counters in a table named profiler_stats):
+
+test=# SELECT sourcecode, exec_count, time_total, time_longest, tuples_inserted FROM profiler_stats;
+
+                       sourcecode                        | exec_count | time_total | time_longest | tuples_inserted
+---------------------------------------------------------+------------+------------+--------------+-----------------
+                                                         |          0 |          0 |            0 |               0
+ BEGIN                                                   |          0 |          0 |            0 |               0
+                                                         |          0 |          0 |            0 |               0
+   FOR i in 1..count LOOP                                |          1 |   0.003207 |     0.003207 |             100
+     INSERT INTO testTable VALUES( count, count*2 );     |        100 |   0.002833 |     0.000174 |             100
+   END LOOP;                                             |          0 |          0 |            0 |               0
+                                                         |          0 |          0 |            0 |               0
+   RETURN COUNT;                                         |          1 |      9e-06 |        9e-06 |               0
+(8 rows)
+
+Notice the time_total and time_longest columns for the INSERT statement - we executed that statement 100 times, spending
+a total of .002833 seconds and the longest iteration took .000174 seconds.
+
+The primary key to the profiler_stats table is the OID of the target's pg_proc tuple + the line number.  That means that
+all profiling information is co-mingled into the same table and you can use the function's OID to find the rows that you
+want.  You can specify (using a GUC variable) the name of the table performance counter table if you don't want to mix
+your results with other results.
+
+Installation
+===============================================================================
+- Copy this directory to contrib/ in your PostgreSQL source tree.
+
+- Run 'make; make install'
+
+NOTE: this will build and install the PL/pgSQL debugger plugin as
+well.
+
+"make install" will install two plugins into your $prefix/lib/postgresql/plugins
+directory.
+
+Usage
+===============================================================================
+There are two ways to load the profiler:
+
+1) Add the following to your postgresql.conf configuration file:
+    shared_preload_libraries = '$libdir/plugins/plugin_profiler'
+
+2) Execute the command "LOAD '$libdir/plugins/plugin_profiler';"
+
+If you choose the first method, the profiler plugin is automatically loaded
+into every backend process. That means that you will profile every invocation
+of every PL/pgSQL function/trigger in every process.
+
+If you choose the second method, the profiler plugin is only loaded into 
+your current session.
+
+
+When we wrote this plugin, we decided not to ignore the Heisenberg uncertainty principle 
+(as we were first tempted to do); profiling your code *will* slow it down.
+
+Because you will pay a slight performance penalty if once you load the profiler,
+you probably want to start out by loading the profiler into a single session
+until you understand the impact.
+
+Of course, if you want to get a "big picture" of your installation, loading
+the profiler into every session (using the "shared_preload_libraries" method)
+will certainly help.
+
+You must also tell the profiler where to write the performance counters. To do 
+that, you'll have to define a module-specific GUC variable and before you can
+do that, you have to tell the server that it's OK to define that variable:
+
+    custom_variable_classes = 'plpgsql'
+    plpgsql.profiler_tablename = 'profiler_stats'
+
+The first assignment tells PG to expect custom variables prefixed with 'plpgsql'.
+The second assignment tells the profiler the name of the performance counter 
+table.  Remember, you can name the performance counter table anything you like
+and you can create multiple performance counter tables if you want to partition
+your performance data.  You can even store performance information in a 
+TEMPORARY table.
+
+The performance counter table must look like this:
+
+  CREATE TABLE profiler_stats( 
+      sourceCode        TEXT, 
+      func_oid          OID, 
+      line_number       INT, 
+      exec_count        INT8, 
+      tuples_returned   INT8, 
+      time_total        FLOAT8, 
+      time_longest      FLOAT8, 
+      num_scans         INT8, 
+      tuples_fetched    INT8, 
+      tuples_inserted   INT8, 
+      tuples_updated    INT8, 
+      tuples_deleted    INT8, 
+      blocks_fetched    INT8, 
+      blocks_hit        INT8
+    ); 
+
+   CREATE UNIQUE INDEX profiler_stats_pkey ON profiler_stats( func_oid, line_number );
+
+You can name the table anything you like, but you must use the column 
+names shown above.
+
+Once you have loaded the profiler plugin, the profiler will instrument 
+every PL/pgSQL function/trigger that you execute.  At the end of each function,
+it will write the performance counters to the table you named in
+plpgsql.profiler_tablename.
+
+IMPORTANT NOTE:
+
+In the contrib/pldebugger directory, you will find a patch (named 
+profilerPatch<version>.diff, profilerPatch83.diff, for example).  This patch
+is optional - if you do NOT apply the patch to your PG source code tree, you
+will still get timing and execution counts, but you won't get any of the I/O-
+related performance counters.
+
+If you decide to apply the patch, you will need to "make clean ; make install"
+the profiler (the profiler detects the patch when you compile it so you have 
+to rebuild the profiler if you apply the patch).
+
+Notes
+===============================================================================
+The profiler may throw a few surprises at you so be sure to read this section
+if you see anything that's confusing.
+
+First, it's important to keep in mind that the PL/pgSQL compiler/interpreter 
+is lazy (in a good way).  The compiler doesn't actually "compile" any of the 
+SQL statements in your code.  Instead, the compiler takes care of the control-
+of-flow statements (like FOR, IF, WHILE, ...) and leaves everything else 
+until later.  That means that, for example, some statements may incur extra
+I/O the first time they get executed. Why? Because the first time you execute
+an SQL statement (such as an INSERT statement), the PL/pgSQL interpreter will
+parse, plan, and optimize that statement, causing I/O to the system tables. 
+To weed out that extra system-table I/O, just execute your code once before
+you bother to profile it (that will cause the interpreter to parse, plan, 
+and optimize all of the statements that you hit in the first invocation so
+the I/O won't show up once you start profiling).
+
+Next, the profiler has an interesting "feature" (arguably a bug but someone
+may find it useful with the right user interface in front of it). Certain 
+PL/pgSQL statements "control the flow" through your functions.  The most
+obvious example is the IF statement.  When you execute an IF statement, the
+interpreter *may* execute the block of statements following the IF, or it may
+execute the block of statements following the (optional) ELSE.  
+
+When the profiler records the performance counter for such a statement, it 
+aggregates the counters for all statements in the block controlled by that 
+statement. If you look at the sample shown at the start of this document, 
+you'll see that the IF statement controls a single INSERT statement.  The
+INSERT statement inserted 100 tuples.  Notice that the IF statement also
+suggests that it inserted 100 tuples.  That's because the IF statement
+shows you the performance counters for itself plus the performance counters
+for all of the statements controlled by that IF statement. This "feature" 
+is more obvious when you have an IF statement that controls multiple statements.
+
+The following statements fall under this "feature":
+    IF / THEN / ELSE 
+    LOOP
+    WHEN (exception handler)
+    WHILE
+    FOR
+
+License
+===============================================================================
+The PL/pgSQL profiler is released under the Artistic License.
+
+    http://www.opensource.org/licenses/artistic-license.php
+
+Copyright (c) 2004-2007 EnterpriseDB Corporation. All Rights Reserved.
+
+Contact
+===============================================================================
+Korry Douglas (korry.douglas@enterprisedb.com)
+
