@@ -76,6 +76,7 @@ install: all installdirs
 installdirs:
 	$(mkinstalldirs) $(DESTDIR)$(pkglibdir)
 	$(mkinstalldirs) $(DESTDIR)$(pkglibdir)/plugins
+	$(mkinstalldirs) $(DESTDIR)$(datadir)/contrib
 
 clean:
 	@for file in $(addsuffix $(DLSUFFIX), $(SHAREDLIBS)); do \
