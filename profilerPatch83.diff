@@ -1,0 +1,111 @@
+Index: src/include/pgstat.h
+===================================================================
+RCS file: /projects/cvsroot/pgsql/src/include/pgstat.h,v
+retrieving revision 1.64
+diff -c -r1.64 pgstat.h
+*** src/include/pgstat.h	8 Jul 2007 22:23:16 -0000	1.64
+--- src/include/pgstat.h	9 Aug 2007 14:33:09 -0000
+***************
+*** 506,547 ****
+--- 506,558 ----
+  
+  extern void pgstat_initstats(Relation rel);
+  
++ #define HAVE_PGSTATGLOBALS 1			   /* Let PL/pgSQL profiler know that we have pgStatGlobals */
++ 
++ extern PgStat_TableCounts pgStatGlobals;   /* Aggregated stats from all tables */
++ 
+  /* nontransactional event counts are simple enough to inline */
+  
+  #define pgstat_count_heap_scan(rel)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_numscans++;					\
++         pgStatGlobals.t_numscans++;                                     \
+  	} while (0)
+  #define pgstat_count_heap_getnext(rel)									\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_tuples_returned++;			\
++         pgStatGlobals.t_tuples_returned++;                              \
+  	} while (0)
+  #define pgstat_count_heap_fetch(rel)									\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_tuples_fetched++;			\
++         pgStatGlobals.t_tuples_fetched++;                               \
+  	} while (0)
+  #define pgstat_count_index_scan(rel)									\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_numscans++;					\
++         pgStatGlobals.t_numscans++;                                     \
+  	} while (0)
+  #define pgstat_count_index_tuples(rel, n)								\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_tuples_returned += (n);		\
++         pgStatGlobals.t_tuples_returned++;                              \
+  	} while (0)
+  #define pgstat_count_buffer_read(rel)									\
+  	do {																\
+  		if (pgstat_collect_blocklevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_blocks_fetched++;			\
++         pgStatGlobals.t_blocks_fetched++;                               \
+  	} while (0)
+  #define pgstat_count_buffer_hit(rel)									\
+  	do {																\
+  		if (pgstat_collect_blocklevel && (rel)->pgstat_info != NULL)	\
+  			(rel)->pgstat_info->t_counts.t_blocks_hit++;				\
++         pgStatGlobals.t_blocks_hit++;                                   \
+  	} while (0)
+  
+  extern void pgstat_count_heap_insert(Relation rel);
+Index: src/backend/postmaster/pgstat.c
+===================================================================
+RCS file: /projects/cvsroot/pgsql/src/backend/postmaster/pgstat.c,v
+retrieving revision 1.162
+diff -c -r1.162 pgstat.c
+*** src/backend/postmaster/pgstat.c	2 Aug 2007 23:39:44 -0000	1.162
+--- src/backend/postmaster/pgstat.c	9 Aug 2007 14:33:10 -0000
+***************
+*** 159,164 ****
+--- 159,166 ----
+  static int	pgStatXactCommit = 0;
+  static int	pgStatXactRollback = 0;
+  
++ PgStat_TableCounts	pgStatGlobals = {0}; /* Aggregated stats from all tables */
++ 
+  /* Record that's written to 2PC state file when pgstat state is persisted */
+  typedef struct TwoPhasePgStatRecord
+  {
+***************
+*** 1280,1285 ****
+--- 1282,1288 ----
+  
+  		/* t_tuples_inserted is nontransactional, so just advance it */
+  		pgstat_info->t_counts.t_tuples_inserted++;
++ 		pgStatGlobals.t_tuples_inserted++;
+  
+  		/* We have to log the transactional effect at the proper level */
+  		if (pgstat_info->trans == NULL ||
+***************
+*** 1304,1309 ****
+--- 1307,1313 ----
+  
+  		/* t_tuples_updated is nontransactional, so just advance it */
+  		pgstat_info->t_counts.t_tuples_updated++;
++ 		pgStatGlobals.t_tuples_updated++;
+  
+  		/* We have to log the transactional effect at the proper level */
+  		if (pgstat_info->trans == NULL ||
+***************
+*** 1330,1335 ****
+--- 1334,1340 ----
+  
+  		/* t_tuples_deleted is nontransactional, so just advance it */
+  		pgstat_info->t_counts.t_tuples_deleted++;
++ 		pgStatGlobals.t_tuples_deleted++;
+  
+  		/* We have to log the transactional effect at the proper level */
+  		if (pgstat_info->trans == NULL ||
