@@ -42,6 +42,13 @@ PG_MODULE_MAGIC;	/* Tell the server about our compile environment */
  * Type and structure definitions
  **********************************************************************/
 
+#if PG_VERSION_NUM >= 80300
+typedef	PgStat_TableCounts ioStatsType;
+#else
+typedef PgStat_TableEntry  ioStatsType;
+#define SET_VARSIZE(varlena, len)	(VARATT_SIZEP((varlena)) = (len))
+#endif
+
 /* -------------------------------------------------------------------
  * perStmtStats
  *
@@ -52,12 +59,12 @@ PG_MODULE_MAGIC;	/* Tell the server about our compile environment */
  */
 typedef struct
 {
-	PgStat_TableCounts		ioStats;		/* Tuple- and block-level performance counters 		*/
+	ioStatsType		 		ioStats;		/* Tuple- and block-level performance counters 		*/
 	struct timeval			timeLongest;	/* Slowest iteration of this stmt		   			*/
 	struct timeval			timeTotal;		/* Total amount of time spent executing this stmt	*/
 	PgStat_Counter			execCount;		/* Number of times we've executed this stmt			*/
 
-	PgStat_TableCounts		begStats;		/* Starting I/O stats for this statement			*/
+	ioStatsType				begStats;		/* Starting I/O stats for this statement			*/
 	struct timeval		    begTime;		/* Start time for this statement 					*/
 } perStmtStats;
 

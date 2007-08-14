@@ -1,0 +1,100 @@
+*** src/backend/postmaster/pgstat.c	2007-03-01 15:07:02.000000000 -0500
+--- src/backend/postmaster/pgstat.c	2007-08-14 15:14:07.000000000 -0400
+***************
+*** 130,135 ****
+--- 130,137 ----
+  static int	pgStatXactCommit = 0;
+  static int	pgStatXactRollback = 0;
+  
++ PgStat_TableEntry pgStatGlobals = {0};
++ 
+  static TransactionId pgStatDBHashXact = InvalidTransactionId;
+  static HTAB *pgStatDBHash = NULL;
+  static TransactionId pgStatLocalStatusXact = InvalidTransactionId;
+*** src/include/pgstat.h	2006-10-03 20:30:06.000000000 -0400
+--- src/include/pgstat.h	2007-08-14 15:14:07.000000000 -0400
+***************
+*** 394,445 ****
+--- 394,455 ----
+  
+  extern void pgstat_initstats(PgStat_Info *stats, Relation rel);
+  
++ extern PgStat_TableEntry pgStatGlobals;
+  
+  #define pgstat_count_heap_scan(s)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_numscans++;		\
++         pgStatGlobals.t_numscans++;                                     \
+  	} while (0)
+  /* kluge for bitmap scans: */
+  #define pgstat_discount_heap_scan(s)									\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_numscans--;		\
++         pgStatGlobals.t_numscans--;                                     \
+  	} while (0)
+  #define pgstat_count_heap_getnext(s)									\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_tuples_returned++; \
++         pgStatGlobals.t_tuples_returned++;                              \
+  	} while (0)
+  #define pgstat_count_heap_fetch(s)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_tuples_fetched++; \
++         pgStatGlobals.t_tuples_fetched++;                               \
+  	} while (0)
+  #define pgstat_count_heap_insert(s)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_tuples_inserted++; \
++         pgStatGlobals.t_tuples_inserted++;							    \
+  	} while (0)
+  #define pgstat_count_heap_update(s)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_tuples_updated++; \
++         pgStatGlobals.t_tuples_updated++;                               \
+  	} while (0)
+  #define pgstat_count_heap_delete(s)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_tuples_deleted++; \
++         pgStatGlobals.t_tuples_deleted++;                               \
+  	} while (0)
+  #define pgstat_count_index_scan(s)										\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_numscans++;		\
++         pgStatGlobals.t_numscans++;                                     \
+  	} while (0)
+  #define pgstat_count_index_tuples(s, n)									\
+  	do {																\
+  		if (pgstat_collect_tuplelevel && (s)->tabentry != NULL)			\
+  			((PgStat_TableEntry *)((s)->tabentry))->t_tuples_returned += (n); \
++         pgStatGlobals.t_tuples_returned += (n);                         \
+  	} while (0)
+  #define pgstat_count_buffer_read(s,r)									\
+  	do {																\
+***************
+*** 452,457 ****
+--- 462,468 ----
+  					((PgStat_TableEntry *)((s)->tabentry))->t_blocks_fetched++; \
+  			}															\
+  		}																\
++         pgStatGlobals.t_blocks_fetched++;                               \
+  	} while (0)
+  #define pgstat_count_buffer_hit(s,r)									\
+  	do {																\
+***************
+*** 464,469 ****
+--- 475,481 ----
+  					((PgStat_TableEntry *)((s)->tabentry))->t_blocks_hit++; \
+  			}															\
+  		}																\
++         pgStatGlobals.t_blocks_hit++;                                   \
+  	} while (0)
+  
+  
