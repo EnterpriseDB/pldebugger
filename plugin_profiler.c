@@ -32,6 +32,8 @@
 #include <sys/time.h>
 #include "postgres.h"
 #include "utils/palloc.h"
+#include "utils/memutils.h"
+#include "catalog/namespace.h"
 #include "plpgsql.h"
 #include "pgstat.h"
 #include "plugin_helpers.h"
@@ -106,16 +108,19 @@ static void 		  profiler_func_end( PLpgSQL_execstate * estate, PLpgSQL_function 
 static void 		  profiler_stmt_beg( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
 static void 		  profiler_stmt_end( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
 
-static perStmtStats * getStatsForStmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
-static void           dumpStats( PLpgSQL_execstate * estate, PLpgSQL_function * func );
-static void 		  dumpStatsTable( PLpgSQL_execstate * estate, PLpgSQL_function * func );
-static void 		  dumpStatsXML( PLpgSQL_execstate * estate, PLpgSQL_function * func );
-static bool 		  statsAlreadyExist( PLpgSQL_execstate * estate, PLpgSQL_function * func );
-static void 		  updateStats( PLpgSQL_execstate * estate, PLpgSQL_function * func );
-static void 		  insertStats( PLpgSQL_execstate * estate, PLpgSQL_function * func );
-static void 		  initArgTypesInsert( Oid argTypes[14] );
-static void 		  initArgTypesUpdate( Oid argTypes[13] );
+static perStmtStats *getStatsForStmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
+static void          dumpStats( PLpgSQL_execstate * estate, PLpgSQL_function * func );
+static void 		 dumpStatsTable( PLpgSQL_execstate * estate, PLpgSQL_function * func );
+static void 		 dumpStatsXML( PLpgSQL_execstate * estate, PLpgSQL_function * func );
+static bool 		 statsAlreadyExist( PLpgSQL_execstate * estate, PLpgSQL_function * func );
+static void 		 updateStats( PLpgSQL_execstate * estate, PLpgSQL_function * func );
+static void 		 insertStats( PLpgSQL_execstate * estate, PLpgSQL_function * func );
+static void 		 initArgTypesInsert( Oid argTypes[14] );
+static void 		 initArgTypesUpdate( Oid argTypes[13] );
+static const char 	*createTable( const char * qualifiedName );
+static bool 		 tableExists( const char * qualifiedName );
 
+	
 /**********************************************************************
  * Exported Function definitions
  **********************************************************************/
@@ -135,8 +140,45 @@ void _PG_init( void )
 	PLpgSQL_plugin ** var_ptr = (PLpgSQL_plugin **) find_rendezvous_variable( "PLpgSQL_plugin" );
 
 	*var_ptr = &plugin_funcs;
-}
 
+	/*
+	 * NOTE: we have to wrap this code in a PG_TRY() block because there (currently) is no way to find out if a given 
+	 *		 GUC variable already exists - you can call GetConfigOptionByName(), but that will throw an error if the
+	 *		 variable doesn't exist.  So, we just try to define our custom variables and intercept the error if the
+	 *		 variable is already known.
+	 *
+	 *		 We can enounter an existing variable if the user calls a PL/pgSQL function (thus loading this plugin),
+	 *		 and then LOAD's the plugin manually (throwing out the old incarnation of the plugin and loading a new
+	 *		 instance), and finally invokes a PL/pgSQL function again. 
+	 */
+
+	PG_TRY();
+	{
+
+#if 0
+	NOTE: our XML support is pretty flawed at the moment so we will just disable
+		  it.
+
+		DefineCustomStringVariable( "plpgsql.profiler_filename",
+									"Pathname of PL/pgSQL profile file",
+									NULL,
+									&xmlFileName,
+									PGC_USERSET,
+									NULL, 
+									NULL );
+#endif
+
+		DefineCustomStringVariable( "plpgsql.profiler_tablename",
+									"Name of PL/pgSQL profile table",
+									NULL,
+									&statsTableName,
+									PGC_USERSET,
+									NULL,
+									NULL );
+
+	}
+	PG_END_TRY();
+}
 
 void load_plugin( PLpgSQL_plugin * hooks )
 {
@@ -177,54 +219,13 @@ static void profiler_init( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 	char        * funcName;
 	profilerCtx * profilerInfo;
 	char		* procSrc;
-	static bool   initialized = FALSE;
-
-	if( !initialized )
-	{
-		initialized = TRUE;
-
-		/*
-		 * NOTE: we have to wrap this code in a PG_TRY() block because there (currently) is no way to find out if a given 
-		 *		 GUC variable already exists - you can call GetConfigOptionByName(), but that will throw an error if the
-		 *		 variable doesn't exist.  So, we just try to define our custom variables and intercept the error if the
-		 *		 variable is already known.
-		 *
-		 *		 We can enounter an existing variable if the user calls a PL/pgSQL function (thus loading this plugin),
-		 *		 and then LOAD's the plugin manually (throwing out the old incarnation of the plugin and loading a new
-		 *		 instance), and finally invokes a PL/pgSQL function again. If that happens, we get a spanking new copy
-		 *		 of 'initialized' (and therefore think that we have not initialized ourself yet), but the server already
-		 *		 knows about our custom GUC variables.
-		 */
-
-		PG_TRY();
-		{
-			DefineCustomStringVariable( "plpgsql.profiler_filename",
-										"Pathname of PL/pgSQL profile file",
-										NULL,
-										&xmlFileName,
-										PGC_USERSET,
-										NULL, 
-										NULL );
-
-			DefineCustomStringVariable( "plpgsql.profiler_tablename",
-										"Name of PL/pgSQL profile table",
-										NULL,
-										&statsTableName,
-										PGC_USERSET,
-										NULL, 
-										NULL );
-		}
-		PG_END_TRY();
-
-	}
 
 	/* If we don't have a value for plpgsql.profiler_filename, just go home */
-	if(( xmlFileName == NULL ) && ( statsTableName == NULL ))
+	if(( xmlFileName == NULL ) && (( statsTableName == NULL ) || ( statsTableName[0] == '\0' )))
 	{
 		estate->plugin_info = NULL;
 		return;
 	}
-
 	/*
 	 * The PL/pgSQL interpreter provides a void pointer (in each stack frame) that's reserved
 	 * for plugins.  We allocate a profilerCtx structure and record it's address in that
@@ -657,6 +658,9 @@ static bool statsAlreadyExist( PLpgSQL_execstate * estate, PLpgSQL_function * fu
 	void	   * selectPlan;	
 	bool		 result;
 
+	if( !tableExists( statsTableName ))
+		createTable( statsTableName );
+
 	selectStmt = palloc( strlen( rawStmt ) + strlen( statsTableName ));
 	sprintf( selectStmt, rawStmt, statsTableName );
 
@@ -679,6 +683,72 @@ static bool statsAlreadyExist( PLpgSQL_execstate * estate, PLpgSQL_function * fu
 
 	return( result );
 }
+
+/* -------------------------------------------------------------------
+ * tableExists()
+ *
+ * 	This function determines whether the given table name (which may
+ *  be schema qualified) exists.
+ */
+
+static bool tableExists( const char * qualifiedName )
+{
+	RangeVar   *relVar;
+
+	relVar = makeRangeVarFromNameList(stringToQualifiedNameList(qualifiedName));
+
+	if( OidIsValid( RangeVarGetRelid( relVar, true )))
+		return true;
+	else
+		return false;
+}
+
+/* -------------------------------------------------------------------
+ * createTable()
+ *
+ * 	This function creates a profiler statistics table of the proper 
+ *  shape.  The table will be named <qualifiedName>, which may be
+ *  schema-qualified.
+ */
+
+static const char * createTable( const char * qualifiedName )
+{
+	StringInfoData	buf;
+	const char     *createTableString = 
+		" CREATE TABLE %s ( "
+		"  sourceCode TEXT, "
+		"  func_oid OID, "
+		"  line_number INT, "
+		"  exec_count INT8, "
+		"  tuples_returned INT8, "
+		"  time_total FLOAT8, "
+		"  time_longest FLOAT8, "
+		"  num_scans INT8, "
+		"  tuples_fetched INT8, "
+		"  tuples_inserted INT8, "
+		"  tuples_updated INT8, "
+		"  tuples_deleted INT8, "
+		"  blocks_fetched INT8, "
+		"  blocks_hit INT8"
+		" );";
+	const char  *createIndexString = 
+		" CREATE UNIQUE INDEX %s_pkey ON %s( func_oid, line_number );";
+
+	initStringInfo( &buf );
+
+	appendStringInfo( &buf, createTableString, qualifiedName );
+
+	SPI_exec( buf.data, 0 );
+
+	initStringInfo( &buf );
+
+	appendStringInfo( &buf, createIndexString, qualifiedName, qualifiedName );
+	
+	SPI_exec( buf.data, 0 );
+	
+	return qualifiedName;
+}
+
 
 /* -------------------------------------------------------------------
  * initArgTypesInsert()
