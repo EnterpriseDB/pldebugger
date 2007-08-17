@@ -4,17 +4,17 @@ PostgreSQL PL/pgSQL Performance Profiler
 This module (plugin_profiler) implements a performance profiler for functions
 (and triggers) written in PL/pgSQL.
 
-It's still a little rough around the edges (particularly this README) and at
-the moment, it only works with PG 8.3 and above.  All feedback is welcome (you
-can find my contact information at the end of this README).
+All feedback is welcome (you can find my contact information at the end of
+this README).
 
 The PL/pgSQL profiler is implemented as an instrumentation plugin - it does
 absolutely nothing unless you load it into your PG server (see the "Usage"
 section to learn how to load the plugin).  When the profiler is loaded into
-a backend, it intercepts every PL/pgSQL statement that you execute and writes
-performance information about each statement into a table of your choosing 
-(the profiler can also write performance information to an XML file of your 
-choosing, but that functionality is not yet complete and may never be).
+a backend (and enabled), it intercepts every PL/pgSQL statement that you 
+execute and writes performance information about each statement into a table 
+of your choosing (the profiler can also write performance information to an 
+XML file of your choosing, but that functionality is not yet complete and 
+may never be).
 
 So what kind of information does the profiler provide?  For each statement,
 the profiler records:
@@ -58,57 +58,108 @@ your results with other results.
 
 Installation
 ===============================================================================
-- Copy this directory to contrib/ in your PostgreSQL source tree.
+- Unpack the tarball from the root of your PG source tree (you know that you 
+  are in the right place when you see that 'contrib' is a subdirectory of your
+  current directory).
 
-- Run 'make; make install'
-
-NOTE: this will build and install the PL/pgSQL debugger plugin as
-well.
+- Run 'make install'
 
 "make install" will install two plugins into your $prefix/lib/postgresql/plugins
-directory.
+directory (the plugin_profiler and the plugin_debugger).
+
+IMPORTANT NOTE:
+
+	In the contrib/pldebugger directory, you will find a patch (named 
+	profilerPatch<version>.diff, profilerPatch83.diff, for example).  This patch
+	is optional - if you do NOT apply the patch to your PG source code tree, you
+	will still get timing and execution counts, but you won't get any of the I/O-
+	related performance counters.
+
+	If you decide to apply the patch, you will need to "make clean install"
+	the profiler (the profiler detects the patch when you compile it so you have 
+	to rebuild the profiler if you apply the patch).
+
 
 Usage
 ===============================================================================
-There are two ways to load the profiler:
+To use the profiler, you must:
 
-1) Add the following to your postgresql.conf configuration file:
-    shared_preload_libraries = '$libdir/plugins/plugin_profiler'
+	1) Load the profiler plugin
+	2) Tell the profiler where to store its results
+	3) Run the PL/pgSQL functions/triggers that you want to profile
+	4) View the results
 
-2) Execute the command "LOAD '$libdir/plugins/plugin_profiler';"
+LOADING THE PROFILER:
 
-If you choose the first method, the profiler plugin is automatically loaded
-into every backend process. That means that you will profile every invocation
-of every PL/pgSQL function/trigger in every process.
+	The easiest way to load the profiler plugin is to execute the command:
 
-If you choose the second method, the profiler plugin is only loaded into 
-your current session.
+		LOAD '$libdir/plugins/plugin_profiler';
+
+	That will load the profiler into your session; if you prefer, you can 
+	preload the profiler into all sessions by adding the following line to 
+	your postgresql.conf configuration file:
+
+    	shared_preload_libraries = '$libdir/plugins/plugin_profiler'
+
+	There is a tiny (probably immeasurable) amount of extra overhead once 
+	you've loaded the profiler (one extra C function call and two integer 
+	tests for each PL/pgSQL function that you invoke).
+
+ENABLING THE PROFILER:
+
+	Once you've loaded the profiler, a new GUC variable will appear in
+	the pg_settings view: plpgsql.profiler_tablename.
+
+	That variable tells the profiler where to store the performance 
+	counters that it gathers as you run your PL/pgSQL code.
+
+	Simply set plpgsql.profiler_tablename to the name of a table.  The 
+	profiler will automatically create the table that you named if it 
+	does not already exist. (NOTE: the performance counter table won't 
+	be created until you actually profile a function so don't be surprised
+	 if you can't find the table after setting plpgsql.profiler_tablename).
+
+	Once you've defined the plpgsql.profiler_tablename, the plugin will
+	profile *every* PL/pgSQL function you invoke. 
+
+DISABLING THE PROFILER:
+
+	To disable the profiler, just set plpgsql.profiler_tablename to an
+	empty string:
+
+		SET plpgsql.profiler_tablename = '';
+
+PROFILING A FUNCTION/TRIGGER:
+
+	To profiler a function or a trigger, simply invoke it - if you've
+	loaded and enabled the plugin, the profiler will record execution
+	statistics into the performance counter table you specified (in 
+	plpgsql.profiler_tablename).
+
+VIEWING THE RESULTS:
+
+	To see the profiling information recorded for your PL/pgSQL code, just
+	SELECT from the performance counter table you named in 
+	plpgsql.profiler_tablename.
+
+	Note that all profiling information ends up in the same table - if you
+	invoke many different functions, the performance counter table will 
+	contain statistics for each function. Each row in the performance counter
+	 table contains the OID of the profiled function (plus the line number).
+
+	You can change the plpgsql.profiler_tablename at any time if you want 
+	to segregate profiler results into many different tables (remember, the
+	profiler will automatically create the performance counter table for
+	you).
+
+	You can also delete all rows (or, of course, selected rows) from the 
+	performance counter table.  Or, you can simply DROP the performance 
+	counter table (the profiler will automatically create the  table again
+	if needed).
 
 
-When we wrote this plugin, we decided not to ignore the Heisenberg uncertainty principle 
-(as we were first tempted to do); profiling your code *will* slow it down.
-
-Because you will pay a slight performance penalty if once you load the profiler,
-you probably want to start out by loading the profiler into a single session
-until you understand the impact.
-
-Of course, if you want to get a "big picture" of your installation, loading
-the profiler into every session (using the "shared_preload_libraries" method)
-will certainly help.
-
-You must also tell the profiler where to write the performance counters. To do 
-that, you'll have to define a module-specific GUC variable and before you can
-do that, you have to tell the server that it's OK to define that variable:
-
-    custom_variable_classes = 'plpgsql'
-    plpgsql.profiler_tablename = 'profiler_stats'
-
-The first assignment tells PG to expect custom variables prefixed with 'plpgsql'.
-The second assignment tells the profiler the name of the performance counter 
-table.  Remember, you can name the performance counter table anything you like
-and you can create multiple performance counter tables if you want to partition
-your performance data.  You can even store performance information in a 
-TEMPORARY table.
+Notes:
+===============================================================================
 
 The performance counter table must look like this:
 
@@ -134,25 +185,19 @@ The performance counter table must look like this:
 You can name the table anything you like, but you must use the column 
 names shown above.
 
-Once you have loaded the profiler plugin, the profiler will instrument 
-every PL/pgSQL function/trigger that you execute.  At the end of each function,
-it will write the performance counters to the table you named in
-plpgsql.profiler_tablename.
+As mentioned earlier, the profiler will automatically create the performance
+counter table for you if it does not already exist.  If you let the profiler 
+create the performance counter table for you, it will *always* have the right
+form, even if the plugin changes from release to release.
 
-IMPORTANT NOTE:
+If you want to store the performance counters in a TEMP table, you must
+create that table yourself.  The easiest way to create such a table is to 
+copy an existing performance counter table:
 
-In the contrib/pldebugger directory, you will find a patch (named 
-profilerPatch<version>.diff, profilerPatch83.diff, for example).  This patch
-is optional - if you do NOT apply the patch to your PG source code tree, you
-will still get timing and execution counts, but you won't get any of the I/O-
-related performance counters.
+  CREATE TEMP TABLE myPerformanceCounters LIKE <existing performance counter table>
 
-If you decide to apply the patch, you will need to "make clean ; make install"
-the profiler (the profiler detects the patch when you compile it so you have 
-to rebuild the profiler if you apply the patch).
+------
 
-Notes
-===============================================================================
 The profiler may throw a few surprises at you so be sure to read this section
 if you see anything that's confusing.
 
@@ -168,6 +213,8 @@ To weed out that extra system-table I/O, just execute your code once before
 you bother to profile it (that will cause the interpreter to parse, plan, 
 and optimize all of the statements that you hit in the first invocation so
 the I/O won't show up once you start profiling).
+
+------
 
 Next, the profiler has an interesting "feature" (arguably a bug but someone
 may find it useful with the right user interface in front of it). Certain 
