@@ -695,7 +695,11 @@ static bool tableExists( const char * qualifiedName )
 {
 	RangeVar   *relVar;
 
+#if PG_VERSION_NUM >= 80300
 	relVar = makeRangeVarFromNameList(stringToQualifiedNameList(qualifiedName));
+#else
+	relVar = makeRangeVarFromNameList(stringToQualifiedNameList(qualifiedName, "profiler"));
+#endif
 
 	if( OidIsValid( RangeVarGetRelid( relVar, true )))
 		return true;
