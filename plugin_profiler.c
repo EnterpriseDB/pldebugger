@@ -15,12 +15,12 @@
  *		  blocks fetched
  *		  blocks hit (blocks found in buffer pool)
  *		  tuples returned
- *		  tuples fetched 
+ *		  tuples fetched
  *		  tuples inserted
  *		  tuples updated
  *		  tuples deleted
  *
- *	Copyright 2006,2007 - EnterpriseDB, Inc.  
+ *	Copyright 2006,2007 - EnterpriseDB, Inc.
  *
  * IDENTIFICATION
  *	  $EnterpriseDB: edb-postgres/contrib/debugger/plugin_tracer.c,v 1.0 2005/12/15 02:49:32 xrad Exp $
@@ -28,9 +28,10 @@
  *-------------------------------------------------------------------------
  */
 
+#include "postgres.h"
+
 #include <stdio.h>
 #include <sys/time.h>
-#include "postgres.h"
 #include "utils/palloc.h"
 #include "utils/memutils.h"
 #include "catalog/namespace.h"
@@ -179,7 +180,7 @@ void _PG_init( void )
 	}
 	PG_END_TRY();
 }
-
+        
 void load_plugin( PLpgSQL_plugin * hooks )
 {
 	hooks->func_setup = profiler_init;

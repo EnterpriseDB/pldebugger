@@ -208,18 +208,18 @@ static HTAB			* sessionHash;
  * debugger server running in the target process
  */
 
-#define DBG_GET_VARIABLES		"i\n"
-#define DBG_GET_BREAKPOINTS 	"l\n"
-#define DBG_GET_STACK       	"$\n"
-#define DBG_STEP_INTO			"s\n"
-#define DBG_STEP_OVER			"o\n"
-#define DBG_CONTINUE			"c\n"
-#define DBG_ABORT				"x"			
-#define DBG_SELECT_FRAME		"^"			/* Followed by frame number 				*/
-#define DBG_SET_BREAKPOINT		"b"			/* Followed by pkgoid:funcoid:linenumber 	*/
-#define DBG_CLEAR_BREAKPOINT	"f"			/* Followed by pkgoid:funcoid:linenumber 	*/
-#define DBG_GET_SOURCE			"#" 		/* Followed by pkgoid:funcoid				*/
-#define DBG_DEPOSIT				"d"			/* Followed by var.line=value				*/
+#define PLDBG_GET_VARIABLES		"i\n"
+#define PLDBG_GET_BREAKPOINTS 	"l\n"
+#define PLDBG_GET_STACK       	"$\n"
+#define PLDBG_STEP_INTO			"s\n"
+#define PLDBG_STEP_OVER			"o\n"
+#define PLDBG_CONTINUE			"c\n"
+#define PLDBG_ABORT				"x"			
+#define PLDBG_SELECT_FRAME		"^"			/* Followed by frame number 				*/
+#define PLDBG_SET_BREAKPOINT		"b"			/* Followed by pkgoid:funcoid:linenumber 	*/
+#define PLDBG_CLEAR_BREAKPOINT	"f"			/* Followed by pkgoid:funcoid:linenumber 	*/
+#define PLDBG_GET_SOURCE			"#" 		/* Followed by pkgoid:funcoid				*/
+#define PLDBG_DEPOSIT				"d"			/* Followed by var.line=value				*/
 
 #define PROXY_PROTO_VERSION		"2.0"		/* Proxy/Target protocol version			*/
 #define PROXY_API_VERSION		3			/* API version number						*/
@@ -602,7 +602,7 @@ Datum pldbg_step_into( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
 
-	sendString( session, DBG_STEP_INTO );
+	sendString( session, PLDBG_STEP_INTO );
 
 	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session, NULL )));
 }
@@ -624,7 +624,7 @@ Datum pldbg_step_over( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
 
-	sendString( session, DBG_STEP_OVER );
+	sendString( session, PLDBG_STEP_OVER );
 
 	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session, NULL )));
 }
@@ -643,7 +643,7 @@ Datum pldbg_continue( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
 	
-	sendString( session, DBG_CONTINUE );
+	sendString( session, PLDBG_CONTINUE );
 
 	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session, NULL )));
 }
@@ -659,7 +659,7 @@ Datum pldbg_abort_target( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
 	
-	sendString( session, DBG_ABORT );
+	sendString( session, PLDBG_ABORT );
 
 	PG_RETURN_BOOL( getBool( session ));
 
@@ -701,7 +701,7 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 		HeapTuple	   result;
 		TupleDesc	   tupleDesc = RelationNameGetTupleDesc( TYPE_NAME_BREAKPOINT );
 
-		sprintf( frameString, "%s %d", DBG_SELECT_FRAME, frameNumber );
+		sprintf( frameString, "%s %d", PLDBG_SELECT_FRAME, frameNumber );
 
 		sendString( session, frameString );
 
@@ -743,7 +743,7 @@ Datum pldbg_get_source( PG_FUNCTION_ARGS )
 	size_t		   sourceLength;
 	text		 * result;
 
-	sprintf( sourceString, "%s %d", DBG_GET_SOURCE, funcOID );
+	sprintf( sourceString, "%s %d", PLDBG_GET_SOURCE, funcOID );
 
 	sendString( session, sourceString );
 
@@ -790,7 +790,7 @@ Datum pldbg_get_breakpoints( PG_FUNCTION_ARGS )
 		srf->attinmeta = TupleDescGetAttInMetadata( RelationNameGetTupleDesc( TYPE_NAME_BREAKPOINT ));
 		MemoryContextSwitchTo( oldContext );
 
-		sendString( session, DBG_GET_BREAKPOINTS );
+		sendString( session, PLDBG_GET_BREAKPOINTS );
 	}
 	else
 	{
@@ -842,7 +842,7 @@ Datum pldbg_get_variables( PG_FUNCTION_ARGS )
 		srf->attinmeta = TupleDescGetAttInMetadata( RelationNameGetTupleDesc( TYPE_NAME_VAR ));
 		MemoryContextSwitchTo( oldContext );
 
-		sendString( session, DBG_GET_VARIABLES );
+		sendString( session, PLDBG_GET_VARIABLES );
 	}
 	else
 	{
@@ -905,7 +905,7 @@ Datum pldbg_get_stack( PG_FUNCTION_ARGS )
 		srf->attinmeta = TupleDescGetAttInMetadata( RelationNameGetTupleDesc( TYPE_NAME_FRAME ));
 		MemoryContextSwitchTo( oldContext );
 
-		sendString( session, DBG_GET_STACK );
+		sendString( session, PLDBG_GET_STACK );
 	}
 	else
 	{
@@ -985,7 +985,7 @@ Datum pldbg_set_breakpoint( PG_FUNCTION_ARGS )
 	int			   lineNumber = PG_GETARG_INT32( 2 );
 	char		   breakpointString[24];	/* 20 digits + 2 delimiters + 1 command + null terminator */
 
-	sprintf( breakpointString, "%s %d:%d", DBG_SET_BREAKPOINT, funcOID, lineNumber );
+	sprintf( breakpointString, "%s %d:%d", PLDBG_SET_BREAKPOINT, funcOID, lineNumber );
 
 	sendString( session, breakpointString );
 		
@@ -1007,7 +1007,7 @@ Datum pldbg_drop_breakpoint( PG_FUNCTION_ARGS )
 	int			   lineNumber = PG_GETARG_INT32( 2 );
 	char		   breakpointString[13];	/* 10 digits + 1 delimiters + 1 command + null terminator */
 
-	sprintf( breakpointString, "%s %d:%d", DBG_CLEAR_BREAKPOINT, funcOID, lineNumber );
+	sprintf( breakpointString, "%s %d:%d", PLDBG_CLEAR_BREAKPOINT, funcOID, lineNumber );
 
 	sendString( session, breakpointString );
 		
@@ -1032,7 +1032,7 @@ Datum pldbg_deposit_value( PG_FUNCTION_ARGS )
 	char		 * value       	 = GET_STR( PG_GETARG_TEXT_P( 3 ));
 	char         * depositString = (char *)palloc( strlen( varName ) + 10 + 5 );
 
-	sprintf( depositString, "%s %s.%d=%s", DBG_DEPOSIT, varName, lineNumber, value );
+	sprintf( depositString, "%s %s.%d=%s", PLDBG_DEPOSIT, varName, lineNumber, value );
 
 	sendString( session, depositString );
 
@@ -1141,7 +1141,7 @@ static void initSessionHash()
 /*******************************************************************************
  * addSession()
  *
- *	Adds a session (debugSession *) to the hash that we use to map session 
+ *	Adds a session (debugSession *) to the hash that we use to map session
  *  handles into debugSession pointers.  This function returns a handle that
  *	you should give back to the debugger client process.  When the debugger 
  *  client calls us again, he gives us the handle and we map that back into 
@@ -1542,14 +1542,14 @@ static void closeSession( debugSession * session )
  * cleanupAtExit()
  *
  *	This is a callback function that the backend invokes when exiting.  At exit,
- *	we close any connections that we may still have (connections to debugger 
+ *	we close any connections that we may still have (connections to debugger
  *	servers, that is).
  */
 
 static void cleanupAtExit( int code, Datum arg )
 {
 	/*
-	 * FIXME: we should clean up all of the sessions stored in the 
+	 * FIXME: we should clean up all of the sessions stored in the
 	 *		  sessionHash.
 	 */
 
@@ -1564,41 +1564,43 @@ static int allocateServerListener( int * port )
 	struct sockaddr_in 			proxy_addr     	= {0};
 	socklen_t					proxy_addr_len 	= sizeof( proxy_addr );
 	int							reuse_addr_flag = 1;
+#ifdef WIN32
+	WORD 		                wVersionRequested;
+	WSADATA 	                wsaData;
+	u_long                      blockingMode = 0;
+#endif
 
 	/* Ask the TCP/IP stack for an unused port */
 	proxy_addr.sin_family      = AF_INET;
 	proxy_addr.sin_port        = htons( 0 );
 	proxy_addr.sin_addr.s_addr = htonl( INADDR_ANY );
-		
+
 #ifdef WIN32
-	WORD 		wVersionRequested;
-	WSADATA 	wsaData;
-	int 		err;
- 
+
 	wVersionRequested = MAKEWORD( 2, 2 );
- 
+
 	if( WSAStartup( wVersionRequested, &wsaData ) != 0 )
 	{
-		/* Tell the user that we could not find a usable 
-		 * WinSock DLL.                                  
+		/* Tell the user that we could not find a usable
+		 * WinSock DLL.
 		 */
-		return;
+		return 0;
 	}
 
 	/* Confirm that the WinSock DLL supports 2.2.
-	 * Note that if the DLL supports versions greater    
-	 * than 2.2 in addition to 2.2, it will still return 
-	 * 2.2 in wVersion since that is the version we      
-	 * requested.                                        
+	 * Note that if the DLL supports versions greater
+	 * than 2.2 in addition to 2.2, it will still return
+	 * 2.2 in wVersion since that is the version we
+	 * requested.
 	 */
 
-	if ( LOBYTE( wsaData.wVersion ) != 2 ||HIBYTE( wsaData.wVersion ) != 2 ) 
+	if ( LOBYTE( wsaData.wVersion ) != 2 ||HIBYTE( wsaData.wVersion ) != 2 )
 	{
-		/* Tell the user that we could not find a usable 
-		 * WinSock DLL.                                  
+		/* Tell the user that we could not find a usable
+		 * WinSock DLL.
 		 */
 		WSACleanup( );
-		return; 
+		return 0;
 	}
 #endif
 
@@ -1612,13 +1614,11 @@ static int allocateServerListener( int * port )
 	getsockname( sockfd, (struct sockaddr *)&proxy_addr, &proxy_addr_len );
 
 	*port = (int) ntohs( proxy_addr.sin_port );
-	
+
 	/* Get ready to wait for a client */
 	listen( sockfd, 2 );
-	
-#ifdef WIN32
-	u_long blockingMode = 0;
 
+#ifdef WIN32
 	ioctlsocket( sockfd, FIONBIO,  &blockingMode );
 #endif
 

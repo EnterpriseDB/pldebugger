@@ -9,6 +9,8 @@
  *
  **********************************************************************/
 
+#include "postgres.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <unistd.h>
@@ -24,7 +26,6 @@
 	#include <arpa/inet.h>
 #endif
 
-#include "postgres.h"
 #include "nodes/pg_list.h"
 #include "lib/dllist.h"
 #include "lib/stringinfo.h"
@@ -52,21 +53,21 @@ PG_MODULE_MAGIC;
 
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
 
-#define DBG_HELP				'?'	
-#define DBG_CONTINUE			'c'
-#define DBG_SET_BREAKPOINT	   	'b'
-#define DBG_CLEAR_BREAKPOINT    'f'
-#define DBG_PRINT_VAR		    'p'
-#define DBG_PRINT_STACK			'$'
-#define DBG_LIST_BREAKPOINTS 	'l'
-#define DBG_STEP_INTO			's'
-#define DBG_STEP_OVER			'o'
-#define DBG_LIST				'#'
-#define DBG_INFO_VARS			'i'
-#define DBG_SELECT_FRAME		'^'
-#define DBG_DEPOSIT				'd'
-#define DBG_RESTART				'r'
-#define DBG_STOP				'x'
+#define PLDBG_HELP				'?'	
+#define PLDBG_CONTINUE			'c'
+#define PLDBG_SET_BREAKPOINT	   	'b'
+#define PLDBG_CLEAR_BREAKPOINT    'f'
+#define PLDBG_PRINT_VAR		    'p'
+#define PLDBG_PRINT_STACK			'$'
+#define PLDBG_LIST_BREAKPOINTS 	'l'
+#define PLDBG_STEP_INTO			's'
+#define PLDBG_STEP_OVER			'o'
+#define PLDBG_LIST				'#'
+#define PLDBG_INFO_VARS			'i'
+#define PLDBG_SELECT_FRAME		'^'
+#define PLDBG_DEPOSIT				'd'
+#define PLDBG_RESTART				'r'
+#define PLDBG_STOP				'x'
 
 #define	TARGET_PROTO_VERSION	"1.0"
 
@@ -87,10 +88,10 @@ typedef struct
 
 /*
  * When the debugger decides that it needs to step through (or into) a particular function 
- * invocation, it allocates a dbg_ctx and records the address of that structure in the 
+ * invocation, it allocates a dbg_ctx and records the address of that structure in the
  * executor's context structure (estate->plugin_info).
  *
- * The dbg_ctx keeps track of all of the information we need to step through code and 
+ * The dbg_ctx keeps track of all of the information we need to step through code and
  * display variable values
  */
 
@@ -252,7 +253,7 @@ void _PG_init( void )
  * ---------------------------------------------------------------------
  * _PG_fini()
  *
- *	This function is invoked by the server when the PL debugger is 
+ *	This function is invoked by the server when the PL debugger is
  *	unloaded.  It clears out the PLpgSQL_plugin rendezvous variable.
  */
 
@@ -1142,17 +1143,20 @@ static bool connectAsServer( void )
 	socklen_t			cli_addr_len = sizeof(cli_addr);
 	int	 				client_sock;
 	int					reuse_addr_flag = 1;
+#ifdef WIN32
+	WORD                wVersionRequested;
+	WSADATA             wsaData;
+	int                 err;
+	u_long              blockingMode = 0;
+#endif
 
 	/* Ask the TCP/IP stack for an unused port */
 	srv_addr.sin_family      = AF_INET;
 	srv_addr.sin_port        = htons( 0 );
 	srv_addr.sin_addr.s_addr = htonl( INADDR_ANY );
-		
+
 #ifdef WIN32
-	WORD wVersionRequested;
-	WSADATA wsaData;
-	int err;
- 
+
 	wVersionRequested = MAKEWORD( 2, 2 );
  
 	err = WSAStartup( wVersionRequested, &wsaData );
@@ -1161,23 +1165,23 @@ static bool connectAsServer( void )
 		/* Tell the user that we could not find a usable 
 		 * WinSock DLL.                                  
 		 */
-		return;
+		return 0;
 	}
 
 	/* Confirm that the WinSock DLL supports 2.2.
-	 * Note that if the DLL supports versions greater    
-	 * than 2.2 in addition to 2.2, it will still return 
-	 * 2.2 in wVersion since that is the version we      
-	 * requested.                                        
+	 * Note that if the DLL supports versions greater
+	 * than 2.2 in addition to 2.2, it will still return
+	 * 2.2 in wVersion since that is the version we
+	 * requested.
 	 */
 
-	if ( LOBYTE( wsaData.wVersion ) != 2 ||HIBYTE( wsaData.wVersion ) != 2 ) 
+	if ( LOBYTE( wsaData.wVersion ) != 2 ||HIBYTE( wsaData.wVersion ) != 2 )
 	{
-		/* Tell the user that we could not find a usable 
-		 * WinSock DLL.                                  
+		/* Tell the user that we could not find a usable
+		 * WinSock DLL.
 		 */
 		WSACleanup( );
-		return; 
+		return 0;
 	}
 #endif
 
@@ -1197,8 +1201,6 @@ static bool connectAsServer( void )
 	listen( sockfd, 2 );
 		
 #ifdef WIN32
-	u_long blockingMode = 0;
-
 	ioctlsocket( sockfd, FIONBIO,  &blockingMode );
 #endif
 
@@ -1860,7 +1862,7 @@ static PLpgSQL_execstate * select_frame( dbg_ctx * dbg_info, PLpgSQL_execstate *
  *
  *	If the user has defined a breakpoint in this function, we connect to 
  *  the debugger client, allocate a per-invocation debugger context structure
- *  (a dbg_ctx), and record the address of that context structure in the 
+ *  (a dbg_ctx), and record the address of that context structure in the
  *  pl_exec execution state (estate->plugin_info).
  *
  */
@@ -2046,7 +2048,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 
     /*
 	 * Note: we must create a dynamically allocated PLpgSQL_expr here - we 
-	 *       can't create one on the stack because exec_assign_expr() 
+	 *       can't create one on the stack because exec_assign_expr()
 	 *       links this expression into a list (active_simple_exprs) and
 	 *       this expression must survive until the end of the current 
 	 *	     transaction so we don't free it out from under spl_plpgsql_xact_cb()
@@ -2463,7 +2465,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 
 				switch( command[0] )
 				{
-					case DBG_CONTINUE:
+					case PLDBG_CONTINUE:
 					{
 						/*
 						 * Continue (stop single-stepping and just run to the next breakpoint)
@@ -2473,19 +2475,19 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 
-					case DBG_SET_BREAKPOINT:
+					case PLDBG_SET_BREAKPOINT:
 					{
 						setBreakpoint( frame, command );
 						break;
 					}
 				
-					case DBG_CLEAR_BREAKPOINT:
+					case PLDBG_CLEAR_BREAKPOINT:
 					{
 						clearBreakpoint( frame, command );
 						break;
 					}
 
-					case DBG_PRINT_VAR:
+					case PLDBG_PRINT_VAR:
 					{
 						/*
 						 * Print value of given variable 
@@ -2495,13 +2497,13 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 
-					case DBG_LIST_BREAKPOINTS:
+					case PLDBG_LIST_BREAKPOINTS:
 					{
 						send_breakpoints( frame );
 						break;
 					}
 
-					case DBG_STEP_INTO:
+					case PLDBG_STEP_INTO:
 					{
 						/* 
 						 * Single-step/step-into
@@ -2511,7 +2513,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 
-					case DBG_STEP_OVER:
+					case PLDBG_STEP_OVER:
 					{
 						/*
 						 * Single-step/step-over
@@ -2520,7 +2522,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 
-					case DBG_LIST:
+					case PLDBG_LIST:
 					{
 						/*
 						 * Send source code for given function
@@ -2529,13 +2531,13 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 
-					case DBG_PRINT_STACK:
+					case PLDBG_PRINT_STACK:
 					{
 						send_stack( dbg_info );
 						break;
 					}
 
-					case DBG_SELECT_FRAME:
+					case PLDBG_SELECT_FRAME:
 					{
 						frame = select_frame( dbg_info, estate, atoi( &command[2] ));
 						send_cur_line( frame, frame->err_stmt );	/* Report the current location 				 */
@@ -2543,7 +2545,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 
 					}
 
-					case DBG_DEPOSIT:
+					case PLDBG_DEPOSIT:
 					{
 						/* 
 						 * Deposit a new value into the given variable
@@ -2552,7 +2554,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 
-					case DBG_INFO_VARS:
+					case PLDBG_INFO_VARS:
 					{
 						/*
 						 * Send list of variables (and their values)
@@ -2561,8 +2563,8 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 						break;
 					}
 					
-					case DBG_RESTART:
-					case DBG_STOP:
+					case PLDBG_RESTART:
+					case PLDBG_STOP:
 					{
 						/* stop the debugging session */
 						dbg_send( per_session_ctx.client_w, "%s", "t" );
