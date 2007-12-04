@@ -1,5 +1,5 @@
 /**********************************************************************
- * pl_dbg.c	- Debugger for the PL/pgSQL procedural language
+ * plugin_debugger.c	- Debugger for the PL/pgSQL procedural language
  *
  * Copyright (c) 2004-2007 EnterpriseDB Corporation. All Rights Reserved.
  *
@@ -1265,7 +1265,11 @@ static bool connectAsServer( void )
 			
 		/* This doesn't look like a valid proxy - he didn't send us the right info */
 		dbg_send( per_session_ctx.client_w, "%s", "f" );
-		close( client_sock );
+#ifdef WIN32
+		closesocket( client_sock );
+#else
+        close( client_sock );
+#endif
 		per_session_ctx.client_w = per_session_ctx.client_r = 0;
 		per_session_ctx.client_port = 0;
 	}

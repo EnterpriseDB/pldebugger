@@ -315,7 +315,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	session->serverPort = PG_GETARG_UINT32( 0 );
 	session->listener   = -1;
-
+   
 	if(( session->serverSocket = socket( AF_INET, SOCK_STREAM, 0 )) < 0 )
 		ereport( ERROR, ( errcode_for_socket_access(), errmsg( "could not create socket for debugger connection" )));
 		
@@ -504,7 +504,11 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		
 		/* This doesn't look like a valid server - he didn't send us the right info */
 		sendString( session, "f" );
-		close( session->serverSocket );
+#ifdef WIN32
+		closesocket( session->serverSocket );
+#else
+        close( session->serverSocket );
+#endif
 		session->serverSocket = -1;
 	}
 }
@@ -1521,12 +1525,14 @@ static void closeSession( debugSession * session )
 {
 	if( session->serverSocket )
 	{
-#ifdef __WIN32__
+#ifdef WIN32
 		shutdown( session->serverSocket, SD_SEND );
+        closesocket( session->serverSocket );
 #else
 		shutdown( session->serverSocket, SHUT_WR );
+        close( session->serverSocket );
 #endif
-		close( session->serverSocket );
+		
 	}
 
 	if( session->listener )
