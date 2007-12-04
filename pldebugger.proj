@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
+
+    <Target Name="all" DependsOnTargets="targetinfo;plugin_debugger;plugin_profiler;pldbgapi" />
+
+    <Import Project="settings.projinc" />
+
+    <!-- Setup for Debug or Release -->
+    <Choose>
+        <When Condition="'$(DEBUG)'=='1'">
+            <PropertyGroup>
+                <XTRA_CFLAGS>/Od /MDd /Zi /D "DEBUG=1" /D "_DEBUG"</XTRA_CFLAGS>
+                <XTRA_LDFLAGS>/DEBUG /defaultlib:$(PGPATH)\Debug\postgres\postgres.lib</XTRA_LDFLAGS>
+            </PropertyGroup>
+        </When>
+        <Otherwise>
+            <PropertyGroup>
+                <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
+                <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\postgres\postgres.lib</XTRA_LDFLAGS>
+            </PropertyGroup>
+        </Otherwise>
+    </Choose>
+
+    <PropertyGroup>
+        <!-- Compiler flags -->
+        <CFLAGS>/nologo /wd4273 /TC /LD $(XTRA_CFLAGS) /D "WIN32" /D "__WIN32__" /D "_CRT_SECURE_NO_DEPRECATE" /D "_CRT_NONSTDC_NO_DEPRECATE" /D "_WINDLL" /D "_MBCS"</CFLAGS>
+
+        <!-- Linker flags -->
+        <LDFLAGS>/DLL $(XTRA_LDFLAGS) /defaultlib:user32 /defaultlib:netapi32 /defaultlib:advapi32 /defaultlib:msi /defaultlib:shell32 /defaultlib:ws2_32 /defaultlib:Secur32.lib</LDFLAGS>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ClCommand Include="/I$(PGPATH)\src\include" />
+        <ClCommand Include="/I$(PGPATH)\src\include\port\win32" />
+        <ClCommand Include="/I$(PGPATH)\src\include\port\win32_msvc" />
+        <ClCommand Include="/I$(PGPATH)\src\port" />
+        <ClCommand Include="/I$(PGPATH)\src\pl\plpgsql\src" />
+        <ClCommand Include="/I$(GETTEXTPATH)\include" />
+        <ClCommand Include="/I$(OPENSSLPATH)\include" />
+        <ClCommand Include="/I$(KERBEROSPATH)\inc\krb5" />
+    </ItemGroup>
+
+    <!-- TARGETINFO -->
+    
+    <ItemGroup>
+        <TargetInfoSrc Include="targetinfo.c" />
+    </ItemGroup>
+
+    <Target Name="targetinfo" Inputs="@(TargetInfoSrc)" Outputs="targetinfo.dll">
+        <Message Text="Building targetinfo.dll" />
+        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
+        <WriteLinesToFile File="flist" Lines="@(TargetInfoSrc)" Overwrite="false" />
+        <Exec Command="cl $(CFLAGS) @flist /link /def:targetinfo.def $(LDFLAGS)" />
+    </Target>
+    
+    <!-- PLUGIN_DEBUGGER -->
+    
+    <ItemGroup>
+        <PluginDebuggerSrc Include="plugin_debugger.c" />
+    </ItemGroup>
+
+    <Target Name="plugin_debugger" Inputs="@(PluginDebuggerSrc)" Outputs="plugin_debugger.dll">
+        <Message Text="Building plugin_debugger.dll" />
+        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
+        <WriteLinesToFile File="flist" Lines="@(PluginDebuggerSrc)" Overwrite="false" />
+        <Exec Command="cl $(CFLAGS) @flist /link /def:plugin_debugger.def $(LDFLAGS)" />
+    </Target>
+    
+    <!-- PLUGIN_PROFILER -->
+    
+    <ItemGroup>
+        <PluginProfilerSrc Include="plugin_profiler.c" />
+    </ItemGroup>
+
+    <Target Name="plugin_profiler" Inputs="@(PluginProfilerSrc)" Outputs="plugin_profiler.dll">
+        <Message Text="Building plugin_profiler.dll" />
+        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
+        <WriteLinesToFile File="flist" Lines="@(PluginProfilerSrc)" Overwrite="false" />
+        <Exec Command="cl $(CFLAGS) @flist /link /def:plugin_profiler.def $(LDFLAGS)" />
+    </Target>
+
+    <!-- PLDBGAPI -->
+
+    <ItemGroup>
+        <PlDbgApiSrc Include="pldbgapi.c" />
+    </ItemGroup>
+
+    <Target Name="pldbgapi" Inputs="@(PlDbgApiSrc)" Outputs="pldbgapi.dll" DependsOnTargets="plugin_debugger">
+        <Message Text="Building pldbgapi.dll" />
+        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
+        <WriteLinesToFile File="flist" Lines="@(PlDbgApiSrc)" Overwrite="false" />
+        <Exec Command="cl $(CFLAGS) @flist /link /def:pldbgapi.def $(LDFLAGS) /defaultlib:plugin_debugger.lib" />
+    </Target>
+    
+    
+    <Target Name="clean">
+        <Delete Files="targetinfo.dll;plugin_debugger.dll;plugin_profiler.dll;pldbgapi.dll" />
+        <Delete Files="targetinfo.exp;plugin_debugger.exp;plugin_profiler.exp;pldbgapi.exp" />
+        <Delete Files="targetinfo.lib;plugin_debugger.lib;plugin_profiler.lib;pldbgapi.lib" />
+        <Delete Files="targetinfo.dll.manifest;plugin_debugger.dll.manifest;plugin_profiler.dll.manifest;pldbgapi.dll.manifest" />
+        <Delete Files="flist" />
+    </Target>
+
+</Project>

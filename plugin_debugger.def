@@ -1,0 +1,17 @@
+EXPORTS
+  BreakpointBusySession
+  BreakpointCleanupProc
+  BreakpointDelete
+  BreakpointFreeSession
+  BreakpointGetList
+  BreakpointInsert
+  BreakpointInsertOrUpdate
+  BreakpointLookup
+  BreakpointOnId
+  BreakpointReleaseList
+  BreakpointShowAll
+  pg_finfo_plpgsql_oid_debug
+  _PG_fini
+  _PG_init
+  Pg_magic_func
+  plpgsql_oid_debug

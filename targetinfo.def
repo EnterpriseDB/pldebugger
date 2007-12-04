@@ -1,0 +1,4 @@
+EXPORTS
+  pg_finfo_pldbg_get_target_info
+  Pg_magic_func
+  pldbg_get_target_info

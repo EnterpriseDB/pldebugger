@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
+<!--
+  Project level settings.
+  Can be overridden on the commandline by things like:
+  msbuild /p:PGPATH=C:\postgresql-8.3.0
+-->
+
+    <PropertyGroup>
+    
+        <!-- Debug build? -->
+        <DEBUG>0</DEBUG>
+
+        <!-- PostgreSQL source tree -->
+        <PGPATH>C:\pgbuild\buildtrees\postgresql-8.3beta3</PGPATH>
+        
+        <!-- Gettext source tree -->
+        <GETTEXTPATH>C:\pgBuild\gettext</GETTEXTPATH>
+        
+        <!-- OpenSSL source tree -->
+        <OPENSSLPATH>C:\pgBuild\OpenSSL</OPENSSLPATH>
+        
+        <!-- Kerberos source tree -->
+        <KERBEROSPATH>C:\pgBuild\krb5</KERBEROSPATH>
+
+    </PropertyGroup>
+</Project>
