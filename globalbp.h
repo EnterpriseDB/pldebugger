@@ -47,7 +47,10 @@ typedef struct BreakpointData
  */
 typedef struct BreakpointKey
 {
-	Oid			databaseId;	  
+	Oid			databaseId;
+#if INCLUDE_PACKAGE_SUPPORT
+	Oid		   	packageId;		/* invalid OID means this is not a package-related breakpoint  */
+#endif
 	Oid			functionId;
 	int			lineNumber;
 	int			targetPid;		/* -1 means any process */

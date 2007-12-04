@@ -1910,7 +1910,7 @@ static bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid fu
  */
 
 	key.targetPid = MyProc->pid;		/* Search for a global breakpoint targeted at our process ID */
-
+  
 	if((( *dst = BreakpointLookup( BP_GLOBAL, &key )) != NULL ) && ((*dst)->data.busy == FALSE ))
 	{
 		*scope = BP_GLOBAL;
@@ -2861,9 +2861,11 @@ static HTAB *localBreakCounts;
 
 typedef struct BreakCountKey
 {
-	Oid			databaseId;	  
-	Oid		   	packageId;		/* invalid OID means this is not a package-related breakpoint  */
-	Oid			functionId;
+	Oid			databaseId;
+#if INCLUDE_PACKAGE_SUPPORT
+	Oid		   	packageId;		/* Not used, but included to match BreakpointKey so casts work as expected */
+#endif
+    Oid			functionId;
 } BreakCountKey;
 
 typedef struct BreakCount
@@ -2873,7 +2875,7 @@ typedef struct BreakCount
 } BreakCount;
 
 /*-------------------------------------------------------------------------------------
- * Prototypes for functions which operate on GlobalBreakCounts. 
+ * Prototypes for functions which operate on GlobalBreakCounts.
  *-------------------------------------------------------------------------------------
  */
 static void initGlobalBreakpoints(int size);
@@ -2895,7 +2897,7 @@ static void reserveBreakpoints( void )
 	RequestAddinLWLocks( 1 );
 }
 
-static void 
+static void
 initializeHashTables(void)
 {
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
@@ -2908,7 +2910,7 @@ initializeHashTables(void)
 	initLocalBreakCounts();
 }
 
-static void 
+static void
 initLocalBreakpoints(void)
 {
 	HASHCTL	ctl = {0};
@@ -2920,7 +2922,7 @@ initLocalBreakpoints(void)
 	localBreakpoints = hash_create("Local Breakpoints", 128, &ctl, HASH_ELEM | HASH_FUNCTION);
 }
 
-static void 
+static void
 initGlobalBreakpoints(int tableEntries)
 {
 	bool   	  		found;
@@ -2938,7 +2940,7 @@ initGlobalBreakpoints(int tableEntries)
 		 * in shared memory so other processes can find it later.
 		 */
 		if (!found)
-		    *lockId = breakpointLock = LWLockAssign();		
+		    *lockId = breakpointLock = LWLockAssign();
 		else
 			breakpointLock = *lockId;
 
@@ -2948,7 +2950,7 @@ initGlobalBreakpoints(int tableEntries)
 		breakpointCtl.keysize   = sizeof(BreakpointKey);
 		breakpointCtl.entrysize = sizeof(Breakpoint);
 		breakpointCtl.hash 	  	= tag_hash;
-		
+
 		globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
 
 		if (!globalBreakpoints)
@@ -2957,10 +2959,10 @@ initGlobalBreakpoints(int tableEntries)
 		/*
 		 * And create a shared-memory hash to hold our global breakpoint counts
 		 */
-		breakcountCtl.keysize   = sizeof(Oid);
+		breakcountCtl.keysize   = sizeof(BreakCountKey);
 		breakcountCtl.entrysize = sizeof(BreakCount);
 		breakcountCtl.hash    	= tag_hash;
-		
+
 		globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
 
 		if (!globalBreakCounts)
@@ -2973,8 +2975,8 @@ initGlobalBreakpoints(int tableEntries)
  *
  *	This function waits for a lightweight lock that protects
  *  the breakpoint and breakcount hash tables at the given
- *	scope.  If scope is BP_GLOBAL, this function locks 
- * 	breakpointLock. If scope is BP_LOCAL, this function 
+ *	scope.  If scope is BP_GLOBAL, this function locks
+ * 	breakpointLock. If scope is BP_LOCAL, this function
  *	doesn't lock anything because local breakpoints are,
  *	well, local (clever naming convention, huh?)
  */
@@ -2995,8 +2997,8 @@ acquireLock(eBreakpointScope scope, LWLockMode mode)
  *	This function releases the lightweight lock that protects
  *  the breakpoint and breakcount hash tables at the given
  *	scope.  If scope is BP_GLOBAL, this function releases
- * 	breakpointLock. If scope is BP_LOCAL, this function 
- *	doesn't do anything because local breakpoints are not 
+ * 	breakpointLock. If scope is BP_LOCAL, this function
+ *	doesn't do anything because local breakpoints are not
  *  protected by a lwlock.
  */
 
@@ -3013,7 +3015,7 @@ releaseLock(eBreakpointScope scope)
  * lookup the given global breakpoint hash key. Returns an instance
  * of Breakpoint structure
  */
-Breakpoint * 
+Breakpoint *
 BreakpointLookup(eBreakpointScope scope, BreakpointKey *key)
 {
 	Breakpoint	*entry;
@@ -3022,7 +3024,7 @@ BreakpointLookup(eBreakpointScope scope, BreakpointKey *key)
 	acquireLock(scope, LW_SHARED);
 	entry = (Breakpoint *) hash_search( getBreakpointHash(scope), (void *) key, HASH_FIND, &found);
 	releaseLock(scope);
-	
+
 	return entry;
 }
 
@@ -3363,7 +3365,7 @@ initLocalBreakCounts(void)
 {
 	HASHCTL ctl = {0};
 
-	ctl.keysize   = sizeof(Oid);
+	ctl.keysize   = sizeof(BreakCountKey);
 	ctl.entrysize = sizeof(BreakCount);
 	ctl.hash 	  = tag_hash;
 

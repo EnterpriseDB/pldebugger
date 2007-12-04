@@ -534,12 +534,12 @@ Datum pldbg_set_global_breakpoint( PG_FUNCTION_ARGS )
 	breakpoint.key.databaseId = MyProc->databaseId;
 	breakpoint.key.functionId = PG_GETARG_OID( 1 );
 
-	if( PG_ARGISNULL( 3 ))
+	if( PG_ARGISNULL( 2 ))
 		breakpoint.key.lineNumber = -1;
 	else
 		breakpoint.key.lineNumber = PG_GETARG_INT32( 2 );
 
-	if( PG_ARGISNULL( 4 ))
+	if( PG_ARGISNULL( 3 ))
 		breakpoint.key.targetPid = -1;
 	else
 		breakpoint.key.targetPid  = PG_GETARG_INT32( 3 );
