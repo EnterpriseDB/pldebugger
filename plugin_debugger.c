@@ -273,12 +273,24 @@ PG_FUNCTION_INFO_V1(OID_DEBUG_FUNCTION);
 Datum OID_DEBUG_FUNCTION(PG_FUNCTION_ARGS)
 {
 	Oid			  funcOid = InvalidOid;		/* Initialize to keep compiler happy */
-
-	if( !superuser())
-		ereport( ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg( "must be a superuser to create a breakpoint" )));
+	HeapTuple		  tuple;
+	Oid			  userid;
 
 	if(( funcOid = PG_GETARG_OID( 0 )) == InvalidOid )
 		ereport( ERROR, ( errcode( ERRCODE_UNDEFINED_FUNCTION ), errmsg( "no target specified" )));
+
+	/* get the owner of the function */
+	tuple = SearchSysCache(PROCOID,
+				   ObjectIdGetDatum(funcOid),
+				   0, 0, 0);
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for function %u",
+			 funcOid);
+	userid = ((Form_pg_proc) GETSTRUCT(tuple))->proowner;
+	ReleaseSysCache(tuple);
+
+	if( !superuser() && (GetUserId() != userid))
+		ereport( ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg( "must be owner or superuser to create a breakpoint" )));
 
 	addLocalBreakpoint( funcOid, -1 );
 
