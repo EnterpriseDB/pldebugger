@@ -26,7 +26,7 @@
         <CFLAGS>/nologo /wd4273 /TC /LD $(XTRA_CFLAGS) /D "WIN32" /D "__WIN32__" /D "_CRT_SECURE_NO_DEPRECATE" /D "_CRT_NONSTDC_NO_DEPRECATE" /D "_WINDLL" /D "_MBCS" /D "_USE_32BIT_TIME_T"</CFLAGS>
 
         <!-- Linker flags -->
-        <LDFLAGS>/DLL $(XTRA_LDFLAGS) /defaultlib:user32 /defaultlib:netapi32 /defaultlib:advapi32 /defaultlib:msi /defaultlib:shell32 /defaultlib:ws2_32 /defaultlib:Secur32.lib</LDFLAGS>
+        <LDFLAGS>/DLL $(XTRA_LDFLAGS) /defaultlib:user32 /defaultlib:netapi32 /defaultlib:advapi32 /defaultlib:shell32 /defaultlib:ws2_32 /defaultlib:Secur32.lib</LDFLAGS>
     </PropertyGroup>
 
     <ItemGroup>
