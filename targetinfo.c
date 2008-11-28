@@ -44,6 +44,7 @@
 #include "access/heapam.h"							/* For heap_form_tuple()		*/
 #include "access/genam.h"
 #include "access/hash.h"							/* For dynahash stuff			*/
+#include "utils/tqual.h"
 
 /*
  * Let the PG module loader know that we are compiled against
@@ -505,7 +506,7 @@ static Oid getProcOidBySig( const char * pro_name_or_oid, char targetType )
 	parseNameAndArgTypes(pro_name_or_oid, "regprocedurein", false,
 						 &names, &nargs, argtypes);
 
-	clist = FuncnameGetCandidates(names, nargs );
+	clist = FuncnameGetCandidates(names, nargs, false);
 
 	for (; clist; clist = clist->next)
 	{
@@ -552,7 +553,7 @@ static Oid getProcOidByName(const char * pro_name_or_oid, char targetType )
 	 * pg_proc entries in the current search path.
 	 */
 	names = parseNames(pro_name_or_oid);
-	clist = FuncnameGetCandidates(names, -1);
+	clist = FuncnameGetCandidates(names, -1, false);
 
 	if (clist == NULL)
 		ereport(ERROR,

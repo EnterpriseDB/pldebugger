@@ -97,6 +97,7 @@
 #include "utils/array.h"							/* For DatumGetArrayTypePCopy()	*/
 #include "storage/ipc.h"							/* For on_proc_exit()  			*/
 #include "storage/proc.h"							/* For MyProc		   			*/
+#include "storage/procarray.h"						/* For BackendPidGetProc		*/
 #include "libpq/libpq-be.h"							/* For Port						*/
 #include "miscadmin.h"								/* For MyProcPort				*/
 #include  "utils/catcache.h"
@@ -343,7 +344,8 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 	 */
 
 	sendUInt32( session, MyProc->pid );
-	sendUInt32( session, MAKE_OFFSET( MyProc ));
+
+	sendUInt32( session, (uint32)MyProc);
 
 	if( !getBool( session ))
 	{
@@ -410,6 +412,8 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 	{
 		uint32				serverPID;
 		uint32				serverOff;
+		PGPROC			   *serverProc;
+		char			   *serverProtoVersion;
 		struct sockaddr_in	serverAddr    = {0};
 		socklen_t			serverAddrLen = sizeof(serverAddr);
 		int					serverSocket;	
@@ -463,53 +467,44 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		{
 			ereport( ERROR, ( ERRCODE_CONNECTION_FAILURE, errmsg( "could not create socket for debugger connection" )));
 		}
-		else
-		{
-			session->serverSocket = serverSocket;
 
-			/* Now authenticate the server */
-			serverPID = getUInt32( session );
-			serverOff = getUInt32( session );
-			
-			if( SHM_OFFSET_VALID( serverOff ))
-			{
-				PGPROC * serverProc = (PGPROC *)MAKE_PTR( serverOff );
-			
-				if( serverProc->pid == serverPID )
-				{
-					char	* serverProtoVersion;
-				
-					/* This looks like a valid server, let's use this connection */
-
-					/*
-					 * FIXME: this function should return a tuple that contains information
-					 *  	  about the target we just nabbed - the process ID, user name, ...
-					 */
-
-					sendString( session, "t" );
-
-					/*
-					 * The server now sends it's protocol version and we
-					 * reply with ours
-					 */
-					serverProtoVersion = getNString( session, NULL );
-					sendString( session, PROXY_PROTO_VERSION );
-				
-					mostRecentSession = session;
-
-					PG_RETURN_UINT32( serverPID );
-				}
-			}
-		}
+		session->serverSocket = serverSocket;
 		
-		/* This doesn't look like a valid server - he didn't send us the right info */
-		sendString( session, "f" );
+		/* Now authenticate the server */
+		serverPID = getUInt32( session );
+		serverOff = getUInt32( session );
+		serverProc = BackendPidGetProc(serverPID);
+		
+		if (serverProc == NULL || (uint32)serverProc != serverOff) {
+			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
+						  errmsg( "invalid debugger connection credentials")));
+			/* This doesn't look like a valid server - he didn't send us the right info */
+			sendString( session, "f" );
 #ifdef WIN32
-		closesocket( session->serverSocket );
+			closesocket( session->serverSocket );
 #else
-        close( session->serverSocket );
+			close( session->serverSocket );
 #endif
-		session->serverSocket = -1;
+			session->serverSocket = -1;
+		}
+
+		/*
+		 * FIXME: this function should return a tuple that contains information
+		 *  	  about the target we just nabbed - the process ID, user name, ...
+		 */
+		
+		sendString( session, "t" );
+		
+		/*
+		 * The server now sends it's protocol version and we
+		 * reply with ours
+		 */
+		serverProtoVersion = getNString( session, NULL );
+		sendString( session, PROXY_PROTO_VERSION );
+		
+		mostRecentSession = session;
+		
+		PG_RETURN_UINT32( serverPID );
 	}
 }
 

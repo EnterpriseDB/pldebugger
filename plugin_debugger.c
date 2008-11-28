@@ -34,6 +34,7 @@
 #include "parser/parse_func.h"
 #include "globalbp.h"
 #include "storage/proc.h"							/* For MyProc		   */
+#include "storage/procarray.h"						/* For BackendPidGetProc */
 
 #if INCLUDE_PACKAGE_SUPPORT
 #include "spl.h"
@@ -842,7 +843,7 @@ static void print_var( const PLpgSQL_execstate * frame, const char * var_name, i
 
     if( tgt->isnull )
     {
-		if( dbg_info->symbols[tgt->varno].duplicate_name )
+		if( dbg_info->symbols[tgt->dno].duplicate_name )
 			dbg_send( per_session_ctx.client_w, "v:%s(%d):NULL\n", var_name, lineno );
 		else
 			dbg_send( per_session_ctx.client_w, "v:%s:NULL\n", var_name );
@@ -869,7 +870,7 @@ static void print_var( const PLpgSQL_execstate * frame, const char * var_name, i
 
 	/* Send the name:value to the debugger client */
 
-	if( dbg_info->symbols[tgt->varno].duplicate_name )
+	if( dbg_info->symbols[tgt->dno].duplicate_name )
 		dbg_send( per_session_ctx.client_w, "v:%s(%d):%s\n", var_name, lineno, extval );
 	else
 		dbg_send( per_session_ctx.client_w, "v:%s:%s\n", var_name, extval );
@@ -1223,6 +1224,8 @@ static bool connectAsServer( void )
 	{
 		uint32	proxyPID;
 		uint32	proxyOff;
+		PGPROC *proxyProc;
+		char	proxyProtoVersion[ sizeof( TARGET_PROTO_VERSION ) + 1 ];
 			
 		/* and wait for the debugger client to attach to us */
 		if(( client_sock = accept( sockfd, (struct sockaddr *)&cli_addr, &cli_addr_len )) < 0 )
@@ -1247,43 +1250,41 @@ static bool connectAsServer( void )
 		/* Now authenticate the proxy */
 		proxyPID = readUInt32( client_sock );
 		proxyOff = readUInt32( client_sock );
-			
-		if( SHM_OFFSET_VALID( proxyOff ))
+		proxyProc = BackendPidGetProc(proxyPID);
+		
+		if (proxyProc == NULL || (uint32)proxyProc != proxyOff)
 		{
-			PGPROC * proxyProc = (PGPROC *)MAKE_PTR( proxyOff );
-
-			if( proxyProc->pid == proxyPID )
-			{
-				char	proxyProtoVersion[ sizeof( TARGET_PROTO_VERSION ) + 1 ];
-
-				/* 
-				 * This looks like a valid proxy, let's use this connection
-				 *
-				 * FIXME: we may want to ensure that proxyProc->roleId corresponds
-				 *		  to a superuser too
-				 */
-				dbg_send( per_session_ctx.client_w, "%s", "t" );
-
-				/*
-				 * The proxy now sends it's protocol version and we
-				 * reply with ours
-				 */
-				dbg_read_str( per_session_ctx.client_w, proxyProtoVersion, sizeof( proxyProtoVersion ));
-				dbg_send( per_session_ctx.client_w, "%s", TARGET_PROTO_VERSION );
-
-				return( TRUE );
-			}
-		}
-			
-		/* This doesn't look like a valid proxy - he didn't send us the right info */
-		dbg_send( per_session_ctx.client_w, "%s", "f" );
+			/* This doesn't look like a valid proxy - he didn't send us the right info */
+			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
+						  errmsg( "invalid debugger connection credentials")));
+			dbg_send( per_session_ctx.client_w, "%s", "f" );
 #ifdef WIN32
-		closesocket( client_sock );
+			closesocket( client_sock );
 #else
-        close( client_sock );
+			close( client_sock );
 #endif
-		per_session_ctx.client_w = per_session_ctx.client_r = 0;
-		per_session_ctx.client_port = 0;
+			per_session_ctx.client_w = per_session_ctx.client_r = 0;
+			per_session_ctx.client_port = 0;
+			continue;
+		}
+
+			
+		/* 
+		 * This looks like a valid proxy, let's use this connection
+		 *
+		 * FIXME: we may want to ensure that proxyProc->roleId corresponds
+		 *		  to a superuser too
+		 */
+		dbg_send( per_session_ctx.client_w, "%s", "t" );
+		
+		/*
+		 * The proxy now sends it's protocol version and we
+		 * reply with ours
+		 */
+		dbg_read_str( per_session_ctx.client_w, proxyProtoVersion, sizeof( proxyProtoVersion ));
+		dbg_send( per_session_ctx.client_w, "%s", TARGET_PROTO_VERSION );
+		
+		return( TRUE );
 	}
 }
 
@@ -1320,7 +1321,7 @@ static bool connectAsClient( Breakpoint * breakpoint )
 	}
 
 	sendUInt32( proxySocket, MyProc->pid );
-	sendUInt32( proxySocket, MAKE_OFFSET( MyProc ));
+	sendUInt32( proxySocket, (uint32)MyProc );
 
 	if( !getBool( proxySocket ))
 	{
@@ -2073,7 +2074,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 	expr = (PLpgSQL_expr *) palloc( sizeof( *expr ));
 
 	expr->dtype       	   = PLPGSQL_DTYPE_EXPR;
-	expr->exprno           = -1;
+	expr->dno              = -1;
 	expr->query            = select;
 	expr->plan   	       = NULL;
 	expr->plan_argtypes    = NULL;
@@ -2132,7 +2133,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 		sprintf( select, "SELECT '%s'", value );
 
 		expr->dtype       	  = PLPGSQL_DTYPE_EXPR;
-		expr->exprno           = -1;
+		expr->dno              = -1;
 		expr->query            = select;
 		expr->plan   	      = NULL;
 		expr->plan_argtypes    = NULL;
