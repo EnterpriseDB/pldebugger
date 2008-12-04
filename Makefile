@@ -33,7 +33,7 @@
 ## for full details
 
 SHAREDLIBS      = pldbgapi targetinfo
-PLUGINS         = plugin_debugger # plugin_profiler plugin_tracer
+PLUGINS         = plugin_debugger plugin_profiler # plugin_tracer
 INSTALL_scripts = pldbgapi.sql
 DOCS		    = README.pldebugger README.plprofiler
 
@@ -142,6 +142,7 @@ endif
 ##
 
 plugin_profiler$(DLSUFFIX):     CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src
+#plugin_tracer$(DLSUFFIX):       CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src
 
 
 #################################################################################

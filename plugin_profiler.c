@@ -173,7 +173,9 @@ void _PG_init( void )
 									"Name of PL/pgSQL profile table",
 									NULL,
 									&statsTableName,
+                                                                        NULL,
 									PGC_USERSET,
+                                                                        0,
 									NULL,
 									NULL );
 
@@ -849,10 +851,10 @@ static void dumpStatsXML( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 			fprintf( dst, "      <tuples_returned value='%lld'/>\n", stats->ioStats.t_tuples_returned );
 
 		if( dumpZeroes || stats->timeTotal.tv_sec + stats->timeTotal.tv_usec )
-			fprintf( dst, "      <totalTime       value='%ld.%07ld'/>\n", stats->timeTotal.tv_sec, stats->timeTotal.tv_usec );
+			fprintf( dst, "      <totalTime       value='%ld.%07lld'/>\n", stats->timeTotal.tv_sec, (long long)stats->timeTotal.tv_usec );
 
 		if( dumpZeroes || stats->timeLongest.tv_sec + stats->timeLongest.tv_usec )
-			fprintf( dst, "      <longestTime     value='%ld.%07ld'/>\n", stats->timeLongest.tv_sec, stats->timeLongest.tv_usec );
+			fprintf( dst, "      <longestTime     value='%ld.%07lld'/>\n", stats->timeLongest.tv_sec, (long long)stats->timeLongest.tv_usec );
 
 		if( dumpZeroes || stats->ioStats.t_numscans )
 			fprintf( dst, "      <numscans        value='%lld'/>\n", stats->ioStats.t_numscans );
