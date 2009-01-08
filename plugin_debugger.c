@@ -30,11 +30,15 @@
 #include "lib/dllist.h"
 #include "lib/stringinfo.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "parser/parser.h"
 #include "parser/parse_func.h"
 #include "globalbp.h"
 #include "storage/proc.h"							/* For MyProc		   */
 #include "storage/procarray.h"						/* For BackendPidGetProc */
+#include "utils/array.h"
+#include "utils/builtins.h"
+#include "utils/syscache.h"
 
 #if INCLUDE_PACKAGE_SUPPORT
 #include "spl.h"

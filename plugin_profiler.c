@@ -32,8 +32,13 @@
 
 #include <stdio.h>
 #include <sys/time.h>
+#include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/palloc.h"
 #include "utils/memutils.h"
+#include "utils/syscache.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "catalog/namespace.h"
 #include "plpgsql.h"
 #include "pgstat.h"
