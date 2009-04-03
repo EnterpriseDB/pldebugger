@@ -187,6 +187,7 @@ void _PG_fini( void );				/* shutdown this module when we are dynamically unload
  **********************************************************************/
 static void 		 dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func );
 static void 		 dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
+static void 		 initialize_plugin_info( PLpgSQL_execstate * estate, PLpgSQL_function * func );
 
 static char       ** fetchArgNames( PLpgSQL_function * func, int * nameCount );
 static uint32 		 resolveHostName( const char * hostName );
@@ -1866,7 +1867,12 @@ static PLpgSQL_execstate * select_frame( dbg_ctx * dbg_info, PLpgSQL_execstate *
 		if( entry->callback == dbg_info->error_callback )
 		{
 			if( frameNo-- == 0 )
+			{
+				PLpgSQL_execstate *estate = entry->arg;
+				if (estate->plugin_info == NULL)
+					initialize_plugin_info(estate, estate->err_func);
 				return( entry->arg );
+			}
 		}
 	}
 
@@ -1964,8 +1970,6 @@ static bool breakpointsForFunction( Oid funcOid )
 
 static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 {
-    dbg_ctx * dbg_info;
-
 	if( func == NULL )
 	{
 		/* 
@@ -1981,6 +1985,13 @@ static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 		estate->plugin_info = NULL;
 		return;
 	}
+	initialize_plugin_info(estate, func);
+}
+
+static void initialize_plugin_info( PLpgSQL_execstate * estate,
+									PLpgSQL_function * func )
+{
+    dbg_ctx * dbg_info;
 
 	/* Allocate a context structure and record the address in the estate */
     estate->plugin_info = dbg_info = (dbg_ctx *) palloc( sizeof( dbg_ctx ));
@@ -2280,6 +2291,9 @@ static bool is_datum_visible( PLpgSQL_datum * datum )
 static bool is_var_visible( PLpgSQL_execstate * frame, int var_no )
 {
     dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
+
+	if (dbg_info->symbols == NULL)
+		completeFrame(frame);
 
 	return( dbg_info->symbols[var_no].visible );
 }
