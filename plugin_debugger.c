@@ -1975,7 +1975,7 @@ static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 		return;
 	}
 
-	if( !breakpointsForFunction( funcGetOid( func )))
+	if( !breakpointsForFunction( funcGetOid( func )) && !per_session_ctx.step_into_next_func)
 	{
 		estate->plugin_info = NULL;
 		return;
