@@ -506,7 +506,11 @@ static Oid getProcOidBySig( const char * pro_name_or_oid, char targetType )
 	parseNameAndArgTypes(pro_name_or_oid, "regprocedurein", false,
 						 &names, &nargs, argtypes);
 
+#if (PG_VERSION_NUM >= 80500)
+	clist = FuncnameGetCandidates(names, nargs, false, false, false);
+#else
 	clist = FuncnameGetCandidates(names, nargs, false, false);
+#endif
 
 	for (; clist; clist = clist->next)
 	{
@@ -553,7 +557,11 @@ static Oid getProcOidByName(const char * pro_name_or_oid, char targetType )
 	 * pg_proc entries in the current search path.
 	 */
 	names = parseNames(pro_name_or_oid);
+#if (PG_VERSION_NUM >= 80500)
+	clist = FuncnameGetCandidates(names, -1, false, false, false);
+#else
 	clist = FuncnameGetCandidates(names, -1, false, false);
+#endif
 
 	if (clist == NULL)
 		ereport(ERROR,
