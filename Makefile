@@ -74,9 +74,10 @@ install: all installdirs
 	done
 
 installdirs:
-	$(mkinstalldirs) $(DESTDIR)$(pkglibdir)
-	$(mkinstalldirs) $(DESTDIR)$(pkglibdir)/plugins
-	$(mkinstalldirs) $(DESTDIR)$(datadir)/contrib
+	# MKDIR_P replace mkinstalldirs in PG8.5+
+	$(MKDIR_P)$(mkinstalldirs) $(DESTDIR)$(pkglibdir)
+	$(MKDIR_P)$(mkinstalldirs) $(DESTDIR)$(pkglibdir)/plugins
+	$(MKDIR_P)$(mkinstalldirs) $(DESTDIR)$(datadir)/contrib
 
 clean:
 	@for file in $(addsuffix $(DLSUFFIX), $(SHAREDLIBS)); do \
