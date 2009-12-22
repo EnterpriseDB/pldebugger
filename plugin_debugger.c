@@ -806,7 +806,9 @@ static PLpgSQL_datum * find_datum_by_name( const PLpgSQL_execstate * frame, cons
 			case PLPGSQL_DTYPE_RECFIELD:
 			case PLPGSQL_DTYPE_ARRAYELEM:
 			case PLPGSQL_DTYPE_EXPR:
+#if (PG_VERSION_NUM <= 80400)
 			case PLPGSQL_DTYPE_TRIGARG:
+#endif
 			{
 				break;
 			}
@@ -1446,7 +1448,12 @@ static char * get_text_val( PLpgSQL_var * var, char ** name, char ** type )
 
 static void send_plpgsql_frame( PLpgSQL_execstate * estate )
 {
+
+#if (PG_VERSION_NUM >= 80500)
+	PLpgSQL_function  * func     = estate->func;
+#else
 	PLpgSQL_function  * func     = estate->err_func;
+#endif
 	PLpgSQL_stmt	  * stmt 	 = estate->err_stmt;
 	int					argNameCount;
 	char             ** argNames = fetchArgNames( func, &argNameCount );
@@ -1870,7 +1877,11 @@ static PLpgSQL_execstate * select_frame( dbg_ctx * dbg_info, PLpgSQL_execstate *
 			{
 				PLpgSQL_execstate *estate = entry->arg;
 				if (estate->plugin_info == NULL)
+#if (PG_VERSION_NUM >= 80500)
+					initialize_plugin_info(estate, estate->func);
+#else
 					initialize_plugin_info(estate, estate->err_func);
+#endif
 				return( entry->arg );
 			}
 		}
@@ -2092,9 +2103,11 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 	expr->dno              = -1;
 	expr->query            = select;
 	expr->plan   	       = NULL;
+#if (PG_VERSION_NUM <= 80400)
 	expr->plan_argtypes    = NULL;
-	expr->expr_simple_expr = NULL;
 	expr->nparams          = 0;
+#endif
+	expr->expr_simple_expr = NULL;
 
 	BeginInternalSubTransaction( NULL );
 
@@ -2151,9 +2164,11 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 		expr->dno              = -1;
 		expr->query            = select;
 		expr->plan   	      = NULL;
-		expr->plan_argtypes    = NULL;
 		expr->expr_simple_expr = NULL;
+#if (PG_VERSION_NUM <= 80400)
+		expr->plan_argtypes    = NULL;
 		expr->nparams          = 0;
+#endif
 
 
 		BeginInternalSubTransaction( NULL );
