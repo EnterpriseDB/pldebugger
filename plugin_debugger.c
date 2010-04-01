@@ -39,6 +39,7 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
+#include "miscadmin.h"
 
 #if INCLUDE_PACKAGE_SUPPORT
 #include "spl.h"
