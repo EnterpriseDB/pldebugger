@@ -2377,7 +2377,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 	{
 		dbg_ctx 		  * dbg_info = (dbg_ctx *)frame->plugin_info;
 		Breakpoint		  * breakpoint = NULL;
-		eBreakpointScope	breakpointScope;
+		eBreakpointScope	breakpointScope = 0;
 
 		/*
 		 * The PL compiler marks certain statements as 'invisible' to the
