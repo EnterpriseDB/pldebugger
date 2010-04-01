@@ -850,10 +850,10 @@ static void dumpStatsXML( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 		fprintf( dst, "    <stats>\n" );
 
 		if( dumpZeroes || stats->execCount )
-		    fprintf( dst, "      <executions      value='%lld'/>\n", stats->execCount );
+		    fprintf( dst, "      <executions      value='%lld'/>\n", (long long) stats->execCount );
 
 		if( dumpZeroes || stats->ioStats.t_tuples_returned )
-			fprintf( dst, "      <tuples_returned value='%lld'/>\n", stats->ioStats.t_tuples_returned );
+			fprintf( dst, "      <tuples_returned value='%lld'/>\n", (long long) stats->ioStats.t_tuples_returned );
 
 		if( dumpZeroes || stats->timeTotal.tv_sec + stats->timeTotal.tv_usec )
 			fprintf( dst, "      <totalTime       value='%ld.%07lld'/>\n", stats->timeTotal.tv_sec, (long long)stats->timeTotal.tv_usec );
@@ -862,25 +862,25 @@ static void dumpStatsXML( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 			fprintf( dst, "      <longestTime     value='%ld.%07lld'/>\n", stats->timeLongest.tv_sec, (long long)stats->timeLongest.tv_usec );
 
 		if( dumpZeroes || stats->ioStats.t_numscans )
-			fprintf( dst, "      <numscans        value='%lld'/>\n", stats->ioStats.t_numscans );
+			fprintf( dst, "      <numscans        value='%lld'/>\n", (long long) stats->ioStats.t_numscans );
 
 		if( dumpZeroes || stats->ioStats.t_tuples_fetched )
-			fprintf( dst, "      <tuples_other    value='%lld'/>\n", stats->ioStats.t_tuples_fetched );
+			fprintf( dst, "      <tuples_other    value='%lld'/>\n", (long long) stats->ioStats.t_tuples_fetched );
 
 		if( dumpZeroes || stats->ioStats.t_tuples_inserted )
-			fprintf( dst, "      <tuples_inserted value='%lld'/>\n", stats->ioStats.t_tuples_inserted );
+			fprintf( dst, "      <tuples_inserted value='%lld'/>\n", (long long) stats->ioStats.t_tuples_inserted );
 
 		if( dumpZeroes || stats->ioStats.t_tuples_updated )
-			fprintf( dst, "      <tuples_updated  value='%lld'/>\n", stats->ioStats.t_tuples_updated );
+			fprintf( dst, "      <tuples_updated  value='%lld'/>\n", (long long) stats->ioStats.t_tuples_updated );
 
 		if( dumpZeroes || stats->ioStats.t_tuples_deleted )
-			fprintf( dst, "      <tuples_deleted  value='%lld'/>\n", stats->ioStats.t_tuples_deleted );
+			fprintf( dst, "      <tuples_deleted  value='%lld'/>\n", (long long) stats->ioStats.t_tuples_deleted );
 
 		if( dumpZeroes || stats->ioStats.t_blocks_fetched )
-			fprintf( dst, "      <blocks_fetched  value='%lld'/>\n", stats->ioStats.t_blocks_fetched );
+			fprintf( dst, "      <blocks_fetched  value='%lld'/>\n", (long long) stats->ioStats.t_blocks_fetched );
 
 		if( dumpZeroes || stats->ioStats.t_blocks_hit )
-			fprintf( dst, "      <blocks_hit      value='%lld'/>\n", stats->ioStats.t_blocks_hit );
+			fprintf( dst, "      <blocks_hit      value='%lld'/>\n", (long long) stats->ioStats.t_blocks_hit );
 
 		fprintf( dst, "    </stats>\n" );
 		fprintf( dst, "  </line>\n" );

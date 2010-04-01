@@ -345,7 +345,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	sendUInt32( session, MyProc->pid );
 
-	sendUInt32( session, (uint32)MyProc);
+	sendUInt32( session, (long)MyProc);
 
 	if( !getBool( session ))
 	{
@@ -475,7 +475,7 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		serverOff = getUInt32( session );
 		serverProc = BackendPidGetProc(serverPID);
 		
-		if (serverProc == NULL || (uint32)serverProc != serverOff) {
+		if (serverProc == NULL || (long)serverProc != serverOff) {
 			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
 						  errmsg( "invalid debugger connection credentials")));
 			/* This doesn't look like a valid server - he didn't send us the right info */
