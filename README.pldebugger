@@ -19,10 +19,7 @@ Installation
 - Edit your postgresql.conf file, and modify the shared_preload_libraries config
   option to look like:
 
-  shared_preload_libraries = '$libdir/plugins/plugin_debugger.so'
-
-  (on some platforms the file extension may differ - for example, on Windows it
-  will be .dll not .so).
+  shared_preload_libraries = '$libdir/plugins/plugin_debugger'
 
 - (Re)start PostgreSQL, and run the pldbgapi.sql SQL script in the database or
   databases that you wish to debug functions in.
@@ -56,7 +53,7 @@ The pl/pgsql debugger API is released under the Artistic Licence.
 
     http://www.opensource.org/licenses/artistic-license.php
 
-Copyright (c) 2004-2008 EnterpriseDB Corporation. All Rights Reserved.
+Copyright (c) 2004-2010 EnterpriseDB Corporation. All Rights Reserved.
 
 Contact
 -------
