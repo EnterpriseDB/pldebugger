@@ -2,12 +2,9 @@ PostgreSQL pl/pgsql Debugger API
 ================================
 
 This module is a set of shared libraries which implement an API for debugging
-pl/pgsql functions on PostgreSQL 8.4 and above. The pgAdmin III project
+pl/pgsql functions on PostgreSQL 8.2 and above. The pgAdmin III project
 (http://www.pgadmin.org/) provides a client user interface as part of pgAdmin 
-III v1.10.0 and above.
-
-If you wish to debug functions on PostgreSQL 8.2 or 8.3, please use v0.93 of
-the debugger plugin, or checkout the PRE_8_4_SERVER branch from CVS.
+III v1.8.0 and above..
 
 Installation
 ------------
@@ -19,10 +16,7 @@ Installation
 - Edit your postgresql.conf file, and modify the shared_preload_libraries config
   option to look like:
 
-  shared_preload_libraries = '$libdir/plugins/plugin_debugger.so'
-
-  (on some platforms the file extension may differ - for example, on Windows it
-  will be .dll not .so).
+  shared_preload_libraries = '$libdir/plugins/plugin_debugger'
 
 - (Re)start PostgreSQL, and run the pldbgapi.sql SQL script in the database or
   databases that you wish to debug functions in.
@@ -56,7 +50,7 @@ The pl/pgsql debugger API is released under the Artistic Licence.
 
     http://www.opensource.org/licenses/artistic-license.php
 
-Copyright (c) 2004-2008 EnterpriseDB Corporation. All Rights Reserved.
+Copyright (c) 2004-2010 EnterpriseDB Corporation. All Rights Reserved.
 
 Contact
 -------
