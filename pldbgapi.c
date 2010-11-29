@@ -272,6 +272,7 @@ static void 		   * writen( int serverHandle, void * dst, size_t len );
 static void   		  	 sendBytes( debugSession * session, void * src, size_t len );
 static void   		  	 sendUInt32( debugSession * session, uint32 val );
 static void   		  	 sendString( debugSession * session, char * src );
+static void   		  	*getAddress( debugSession * session );
 static bool   		  	 getBool( debugSession * session );
 static uint32 		  	 getUInt32( debugSession * session );
 static char 		   * getNString( debugSession * session, uint32 * lenPtr );
@@ -345,7 +346,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	sendUInt32( session, MyProc->pid );
 
-	sendUInt32( session, (long)MyProc);
+	sendBytes( session, &MyProc, sizeof(MyProc));
 
 	if( !getBool( session ))
 	{
@@ -411,7 +412,7 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 	while( TRUE )
 	{
 		uint32				serverPID;
-		uint32				serverOff;
+		PGPROC			   *serverOff;
 		PGPROC			   *serverProc;
 		char			   *serverProtoVersion;
 		struct sockaddr_in	serverAddr    = {0};
@@ -472,10 +473,10 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		
 		/* Now authenticate the server */
 		serverPID = getUInt32( session );
-		serverOff = getUInt32( session );
+		serverOff = getAddress( session );
 		serverProc = BackendPidGetProc(serverPID);
 		
-		if (serverProc == NULL || (long)serverProc != serverOff) {
+		if (serverProc == NULL || serverProc != serverOff) {
 			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
 						  errmsg( "invalid debugger connection credentials")));
 			/* This doesn't look like a valid server - he didn't send us the right info */
@@ -1431,6 +1432,23 @@ static bool getBool( debugSession * session )
 
 	return( result );
 }
+
+
+/*
+ * getAddress()
+ *
+ *	Reads a pointer value from the server
+ */
+
+static void *getAddress( debugSession * session )
+{
+	void *result;
+
+	readn( session->serverSocket, &result, sizeof(result));
+
+	return result;
+}
+
 
 /*******************************************************************************
  * getUInt32()

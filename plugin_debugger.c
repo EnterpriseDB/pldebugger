@@ -1231,7 +1231,7 @@ static bool connectAsServer( void )
 	while( TRUE )
 	{
 		uint32	proxyPID;
-		uint32	proxyOff;
+		PGPROC *proxyOff;
 		PGPROC *proxyProc;
 		char	proxyProtoVersion[ sizeof( TARGET_PROTO_VERSION ) + 1 ];
 			
@@ -1257,10 +1257,10 @@ static bool connectAsServer( void )
 
 		/* Now authenticate the proxy */
 		proxyPID = readUInt32( client_sock );
-		proxyOff = readUInt32( client_sock );
+		readn( client_sock, &proxyOff, sizeof( proxyOff ));
 		proxyProc = BackendPidGetProc(proxyPID);
 		
-		if (proxyProc == NULL || (long)proxyProc != proxyOff)
+		if (proxyProc == NULL || proxyProc != proxyOff)
 		{
 			/* This doesn't look like a valid proxy - he didn't send us the right info */
 			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
@@ -1329,7 +1329,7 @@ static bool connectAsClient( Breakpoint * breakpoint )
 	}
 
 	sendUInt32( proxySocket, MyProc->pid );
-	sendUInt32( proxySocket, (long)MyProc );
+	writen( proxySocket, &MyProc, sizeof( MyProc ));
 
 	if( !getBool( proxySocket ))
 	{
