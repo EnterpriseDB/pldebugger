@@ -174,6 +174,7 @@ void _PG_init( void )
 									NULL );
 #endif
 
+#if PG_VERSION_NUM >= 90100
 		DefineCustomStringVariable( "plpgsql.profiler_tablename",
 									"Name of PL/pgSQL profile table",
 									NULL,
@@ -182,7 +183,19 @@ void _PG_init( void )
 									PGC_USERSET,
                                                                         0,
 									NULL,
+									NULL,
 									NULL );
+#else
+                DefineCustomStringVariable( "plpgsql.profiler_tablename",
+                                                                        "Name of PL/pgSQL profile table",
+                                                                        NULL,
+                                                                        &statsTableName,
+                                                                        NULL,
+                                                                        PGC_USERSET,
+                                                                        0,
+                                                                        NULL,
+                                                                        NULL );
+#endif
 
 	}
 	PG_END_TRY();
