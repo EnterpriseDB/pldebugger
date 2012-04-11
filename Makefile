@@ -28,9 +28,9 @@
 ##		http://www.opensource.org/licenses/artistic-license.php
 ## for full details
 
-SHAREDLIBS      = pldbgapi targetinfo
-PLUGINS         = plugin_debugger plugin_profiler
-INSTALL_scripts = pldbgapi.sql
+MODULES    = pldbgapi targetinfo
+PLUGINS    = plugin_debugger plugin_profiler
+DATA       = pldbgapi.sql
 DOCS		    = README.pldebugger README.plprofiler
 
 subdir       = contrib/debugger
@@ -53,37 +53,16 @@ endif
 
 SHLIB_LINK      += $(BE_DLLLIBS)
 
-all:	$(addsuffix $(DLSUFFIX), $(SHAREDLIBS)) $(addsuffix $(DLSUFFIX), $(PLUGINS)) $(INSTALL_scripts)
+all:	$(addsuffix $(DLSUFFIX), $(PLUGINS))
 
-install: all installdirs
-	@for file in $(addsuffix $(DLSUFFIX), $(SHAREDLIBS)); do \
-	  echo "$(INSTALL_SHLIB) $$file '$(DESTDIR)$(pkglibdir)'"; \
-	  $(INSTALL_SHLIB) $$file '$(DESTDIR)$(pkglibdir)'; \
-	done
-	@for file in $(addsuffix $(DLSUFFIX), $(PLUGINS)); do \
-	  echo "$(INSTALL_SHLIB) $$file '$(DESTDIR)$(pkglibdir)/plugins'"; \
-	  $(INSTALL_SHLIB) $$file '$(DESTDIR)$(pkglibdir)/plugins'; \
-	done
-	@for file in $(addprefix $(srcdir)/, $(INSTALL_scripts)); do \
-	  echo "$(INSTALL_DATA) $$file '$(DESTDIR)$(datadir)/contrib'"; \
-	  $(INSTALL_DATA) $$file '$(DESTDIR)$(datadir)/contrib'; \
-	done
+install-plugins: installdir-plugins $(addsuffix $(DLSUFFIX), $(PLUGINS))
+	$(INSTALL_SHLIB) $(addsuffix $(DLSUFFIX), $(PLUGINS)) '$(DESTDIR)$(pkglibdir)/plugins/'
 
-installdirs:
-	# MKDIR_P replace mkinstalldirs in PG8.5+
-	$(MKDIR_P)$(mkinstalldirs) $(DESTDIR)$(pkglibdir)
-	$(MKDIR_P)$(mkinstalldirs) $(DESTDIR)$(pkglibdir)/plugins
-	$(MKDIR_P)$(mkinstalldirs) $(DESTDIR)$(datadir)/contrib
+install: all installdirs installdir-plugins install-plugins
 
-clean:
-	@for file in $(addsuffix $(DLSUFFIX), $(SHAREDLIBS)); do \
-		echo "  rm $$file"; \
-		rm -f $$file; \
-	done
-	@for file in $(addsuffix $(DLSUFFIX), $(PLUGINS)); do \
-		echo "  rm $$file"; \
-		rm -f $$file; \
-	done
+# MKDIR_P replaced mkinstalldirs in PG8.5+
+installdir-plugins:
+	$(MKDIR_P)$(mkinstalldirs) '$(DESTDIR)$(pkglibdir)/plugins'
 
 ################################################################################
 ## Rules for making the debugger plugin.
