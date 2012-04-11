@@ -13,16 +13,7 @@
 #ifndef GLOBALBP_H
 #define GLOBALBP_H
 
-#include "nodes/parsenodes.h"
 #include "utils/hsearch.h"
-/* 
- * defs used in guc.c 
- */
-#define	GBP_MIN_SIZE	12
-#define GBP_MAX_SIZE	500
-#define GBP_RESET_VAL	255
-
-extern int gbp_tab_size;
 
 typedef enum
 {
@@ -62,8 +53,6 @@ typedef struct Breakpoint
 	BreakpointData		data;		
 } Breakpoint;
 
-extern Size 		BreakpointShmemSize(void);
-extern void 		InitBreakpoints(void);
 extern Breakpoint * BreakpointLookup(eBreakpointScope scope, BreakpointKey *key);
 extern bool 		BreakpointInsert(eBreakpointScope scope, BreakpointKey *key, BreakpointData *brkpnt);
 extern bool 		BreakpointDelete(eBreakpointScope scope, BreakpointKey *key);
