@@ -306,50 +306,6 @@ Datum OID_DEBUG_FUNCTION(PG_FUNCTION_ARGS)
 
 /*
  * ---------------------------------------------------------------------
- * tokenize()
- *
- *	This is a re-entrant safe version of the standard C strtok() function.  
- *	tokenize() will split a string (src) into multiple substrings separated by
- *	any of the characters in the delimiter string (delimiters).  Each time you 
- *	call tokenize(), it returns the next subtstring (or NULL when all substrings
- *	have been exhausted). The first time you call this function, ctx should be
- *	NULL and src should point to the start of the string you are splitting.
- *	For every subsequent call, src should be NULL and tokenize() will manage
- *	ctx itself.
- *
- *	NOTE: the search string (src) is brutally altered by this function - make 
- *		  a copy of the search string before you call tokenize() if you need the
- *		  original string.
- */
-
-static char * tokenize( char * src, const char * delimiters, char ** ctx )
-{
-	char * start;
-	char * end;
-
-	if( src == NULL )
-		src = *ctx;
-
-	start = src = ( src + strspn( src, delimiters ));
-
-	if( *src == '\0' )
-		return( NULL );
-
-	if(( end = strpbrk( start, delimiters )) == NULL )
-	{
-		*ctx = strchr( start, '\0' );
-	}
-	else
-    {
-		*end = '\0';
-		*ctx = end + 1;
-    }
-
-	return( start );
-}
-
-/*
- * ---------------------------------------------------------------------
  * readn()
  *
  *	This function reads exactly 'len' bytes from the given socket or it 
@@ -1554,18 +1510,17 @@ static bool parseTargetString( Oid * funcOID, char * targetString )
 
 static bool parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpointString )
 {
-	char * p;
-	char * ctx = NULL;
+	int a, b;
+	int n;
 
-	if(( p = tokenize( breakpointString, ":", &ctx )) != NULL )
-		*funcOID = atoi( p );
+	n = sscanf(breakpointString, "%d:%d", &a, &b);
+	if (n == 2)
+	{
+		*funcOID = a;
+		*lineNumber = b;
+	}
 	else
-		return( FALSE );
-
-	if(( p = tokenize( NULL, ":", &ctx )) != NULL )
-		*lineNumber = atoi( p );
-	else
-		return( FALSE );
+		return false;
 
 	return( TRUE );
 }
