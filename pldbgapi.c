@@ -273,7 +273,7 @@ static void   		  	 sendString( debugSession * session, char * src );
 static void   		  	*getAddress( debugSession * session );
 static bool   		  	 getBool( debugSession * session );
 static uint32 		  	 getUInt32( debugSession * session );
-static char 		   * getNString( debugSession * session, uint32 * lenPtr );
+static char 		   * getNString( debugSession * session );
 static void 		  	 initializeModule( void );
 static void 		  	 cleanupAtExit( int code, Datum arg );
 static uint32 		  	 resolveHostName( const char * hostName );
@@ -360,7 +360,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	sendString( session, PROXY_PROTO_VERSION );
 
-	targetProtoVersion = getNString( session, NULL );
+	targetProtoVersion = getNString( session );
 
 	if( targetProtoVersion )
 		pfree( targetProtoVersion );
@@ -500,7 +500,7 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		 * The server now sends it's protocol version and we
 		 * reply with ours
 		 */
-		serverProtoVersion = getNString( session, NULL );
+		serverProtoVersion = getNString( session );
 		sendString( session, PROXY_PROTO_VERSION );
 		
 		mostRecentSession = session;
@@ -583,7 +583,7 @@ static Datum buildBreakpointDatum( char * breakpointString )
 Datum pldbg_wait_for_breakpoint( PG_FUNCTION_ARGS )
 {
 	debugSession * session           = defaultSession( PG_GETARG_SESSION( 0 ));
-	char         * breakpointString  = getNString( session, NULL );
+	char         * breakpointString  = getNString( session );
 	
 	PG_RETURN_DATUM( buildBreakpointDatum( breakpointString ));
 }
@@ -604,7 +604,7 @@ Datum pldbg_step_into( PG_FUNCTION_ARGS )
 
 	sendString( session, PLDBG_STEP_INTO );
 
-	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session, NULL )));
+	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session )));
 }
 
 /*******************************************************************************
@@ -626,7 +626,7 @@ Datum pldbg_step_over( PG_FUNCTION_ARGS )
 
 	sendString( session, PLDBG_STEP_OVER );
 
-	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session, NULL )));
+	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session )));
 }
 
 /*******************************************************************************
@@ -645,7 +645,7 @@ Datum pldbg_continue( PG_FUNCTION_ARGS )
 	
 	sendString( session, PLDBG_CONTINUE );
 
-	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session, NULL )));
+	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session )));
 }
 
 /*******************************************************************************
@@ -705,7 +705,7 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 
 		sendString( session, frameString );
 
-		resultString = getNString( session, NULL );
+		resultString = getNString( session );
 
 		values[0] = tokenize( resultString, ":", &ctx );  		/* funtion OID 		*/
 		values[1] = tokenize( NULL, ":", &ctx );  				/* linenumber		*/
@@ -747,7 +747,7 @@ Datum pldbg_get_source( PG_FUNCTION_ARGS )
 
 	sendString( session, sourceString );
 
-	source 		 = getNString( session, NULL );
+	source 		 = getNString( session );
 	sourceLength = strlen( source );
 	result 		 = (text *)palloc(sourceLength + VARHDRSZ);
 
@@ -797,7 +797,7 @@ Datum pldbg_get_breakpoints( PG_FUNCTION_ARGS )
 		srf = SRF_PERCALL_SETUP();
 	}
 
-	if(( breakpointString = getNString( session, NULL )) != NULL )
+	if(( breakpointString = getNString( session )) != NULL )
 	{
 		SRF_RETURN_NEXT( srf, buildBreakpointDatum( breakpointString ));
 	}
@@ -849,7 +849,7 @@ Datum pldbg_get_variables( PG_FUNCTION_ARGS )
 		srf = SRF_PERCALL_SETUP();
 	}
 
-	if(( variableString = getNString( session, NULL )) != NULL )
+	if(( variableString = getNString( session )) != NULL )
 	{
 		char	  * values[8];
 		char      * ctx = NULL;
@@ -912,7 +912,7 @@ Datum pldbg_get_stack( PG_FUNCTION_ARGS )
 		srf = SRF_PERCALL_SETUP();
 	}
 
-	if(( frameString = getNString( session, NULL )) != NULL )
+	if(( frameString = getNString( session )) != NULL )
 	{
 		char	  * values[5];
 		char		callCount[10+1];
@@ -1426,7 +1426,7 @@ static bool getBool( debugSession * session )
 	char * str;
 	bool   result;
 
-	str = getNString( session, NULL );
+	str = getNString( session );
 
 	if (str == NULL)
 		elog(ERROR, "debugger protocol error; bool expected");
@@ -1485,12 +1485,9 @@ static uint32 getUInt32( debugSession * session )
  *	the server and tacking on the null-terminator).
  */
 
-static char * getNString( debugSession * session, uint32 * lenPtr )
+static char * getNString( debugSession * session )
 {
 	uint32 len = getUInt32( session );
-	
-	if( lenPtr )
-		*lenPtr = len;
 
 	if( len == 0 )
 		return( NULL );

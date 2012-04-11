@@ -201,7 +201,7 @@ static void 		 initialize_plugin_info( PLpgSQL_execstate * estate, PLpgSQL_funct
 static char       ** fetchArgNames( PLpgSQL_function * func, int * nameCount );
 static uint32 		 resolveHostName( const char * hostName );
 static bool 		 getBool( int channel );
-static char        * getNString( int channel, uint32 * lenPtr );
+static char        * getNString( int channel );
 static void 		 sendString( int channel, char * src );
 static void        * writen( int peer, void * src, size_t len );
 static void 	     dbg_read_str( int channel, char * dst, size_t len );
@@ -435,7 +435,7 @@ static bool getBool( int channel )
 	char * str;
 	bool   result;
 
-	str = getNString( channel, NULL );
+	str = getNString( channel );
 
 	if( str[0] == 't' )
 		result = TRUE;
@@ -475,12 +475,9 @@ static void sendString( int channel, char * src )
  *	the server and tacking on the null-terminator).
  */
 
-static char * getNString( int channel, uint32 * lenPtr )
+static char * getNString( int channel )
 {
 	uint32 len = readUInt32( channel );
-	
-	if( lenPtr )
-		*lenPtr = len;
 
 	if( len == 0 )
 		return( NULL );
@@ -1311,7 +1308,7 @@ static bool connectAsClient( Breakpoint * breakpoint )
 
 	sendString( proxySocket, TARGET_PROTO_VERSION );
 
-	proxyProtoVersion = getNString( proxySocket, NULL );
+	proxyProtoVersion = getNString( proxySocket );
 	
 	pfree( proxyProtoVersion );
 
