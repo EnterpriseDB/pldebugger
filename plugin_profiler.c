@@ -715,6 +715,7 @@ static bool statsAlreadyExist( PLpgSQL_execstate * estate, PLpgSQL_function * fu
 static bool tableExists( const char * qualifiedName )
 {
 	RangeVar   *relVar;
+	Oid			oid;
 
 #if PG_VERSION_NUM >= 80300
 	relVar = makeRangeVarFromNameList(stringToQualifiedNameList(qualifiedName));
@@ -722,7 +723,12 @@ static bool tableExists( const char * qualifiedName )
 	relVar = makeRangeVarFromNameList(stringToQualifiedNameList(qualifiedName, "profiler"));
 #endif
 
-	if( OidIsValid( RangeVarGetRelid( relVar, true )))
+#if PG_VERSION_NUM >= 90200
+	oid = RangeVarGetRelid( relVar, NoLock, true);
+#else
+	oid = RangeVarGetRelid( relVar, true);
+#endif
+	if( OidIsValid( oid) )
 		return true;
 	else
 		return false;

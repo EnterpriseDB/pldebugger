@@ -1424,7 +1424,14 @@ static void send_plpgsql_frame( PLpgSQL_execstate * estate )
 	 * Send the name, function OID, and line number for this frame
 	 */
 
-	appendStringInfo( result, "%s:%d:%d:", func->fn_name, funcGetOid( func ), stmt->lineno );
+	appendStringInfo( result, "%s:%d:%d:",
+#if (PG_VERSION_NUM >= 90200)
+					  func->fn_signature,
+#else
+					  func->fn_name,
+#endif
+					  funcGetOid( func ),
+					  stmt->lineno );
 
 	/*
 	 * Now assemble a string that shows the argument names and value for this frame
@@ -2285,7 +2292,16 @@ static void send_cur_line( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
     dbg_ctx 		 * dbg_info = (dbg_ctx *)estate->plugin_info;
 	PLpgSQL_function * func     = dbg_info->func;
 
-	dbg_send( per_session_ctx.client_w, "%d:%d:%s", funcGetOid( func ), stmt->lineno+1, func->fn_name );
+	dbg_send( per_session_ctx.client_w,
+			  "%d:%d:%s",
+			  funcGetOid( func ),
+			  stmt->lineno+1,
+#if (PG_VERSION_NUM >= 90200)
+			  func->fn_signature
+#else
+			  func->fn_name
+#endif
+		);
 }
 
 /*
