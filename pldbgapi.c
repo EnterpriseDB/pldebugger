@@ -1029,13 +1029,15 @@ Datum pldbg_deposit_value( PG_FUNCTION_ARGS )
 	char         * varName 		 = GET_STR( PG_GETARG_TEXT_P( 1 ));
 	int			   lineNumber 	 = PG_GETARG_INT32( 2 );
 	char		 * value       	 = GET_STR( PG_GETARG_TEXT_P( 3 ));
-	char         * depositString = (char *)palloc( strlen( varName ) + 10 + 5 );
+	StringInfoData buf;
 
-	sprintf( depositString, "%s %s.%d=%s", PLDBG_DEPOSIT, varName, lineNumber, value );
+	initStringInfo( &buf );
 
-	sendString( session, depositString );
+	appendStringInfo( &buf, "%s %s.%d=%s", PLDBG_DEPOSIT, varName, lineNumber, value );
 
-	pfree( depositString );
+	sendString( session, buf.data );
+
+	pfree( buf.data );
 
 	PG_RETURN_BOOL( getBool( session ));
 
