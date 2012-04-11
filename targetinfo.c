@@ -342,23 +342,14 @@ static char * makeFullName( Oid schemaOID, char * targetName )
 {
 	HeapTuple			schemaTuple;
 	Form_pg_namespace   schemaForm    = getSchemaForm( schemaOID, &schemaTuple );
-	char			  * result       = NULL;
-	size_t				len          = strlen( targetName )+2+1; /* Add room for quotes and null terminator */
+	StringInfoData		fullName;
 
-	/* If we found a schema, make room for the quoted name (and the delimiter) */
-	if( HeapTupleIsValid( schemaTuple ))
-		len += strlen( NameStr( schemaForm->nspname ))+2+1; 
+	initStringInfo(&fullName);
 
-	/* Now allocate enough space to hold the fully-qualified, possibly quoted name */
-	result = (char *) palloc( len );
-	result[0] = '\0';
-
-	/* And start putting the whole thing together - schema name first */
 	if( HeapTupleIsValid( schemaTuple ))
 	{
-		strcat( result, quote_identifier( NameStr( schemaForm->nspname )));
-		strcat( result, "." );
-
+		appendStringInfo(&fullName, "%s.",
+						 quote_identifier( NameStr( schemaForm->nspname )));
 		ReleaseSysCache( schemaTuple );
 	}
 
@@ -366,9 +357,9 @@ static char * makeFullName( Oid schemaOID, char * targetName )
 	 * Finally the target name  - we end up with:
 	 *	schema.target
 	 */
-	strcat( result, quote_identifier( targetName ));
+	appendStringInfoString(&fullName, quote_identifier( targetName ));
 
-	return( result );
+	return fullName.data;
 }
 
 /*******************************************************************************
