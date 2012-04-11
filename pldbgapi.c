@@ -253,8 +253,6 @@ Datum pldbg_step_into( PG_FUNCTION_ARGS );
 Datum pldbg_step_over( PG_FUNCTION_ARGS );
 Datum pldbg_continue(  PG_FUNCTION_ARGS );
 Datum pldbg_deposit_value( PG_FUNCTION_ARGS );
-Datum pldbg_get_target_info( PG_FUNCTION_ARGS );
-Datum pldbg_get_target_info81( PG_FUNCTION_ARGS );
 Datum pldbg_get_proxy_info( PG_FUNCTION_ARGS );
 Datum pldbg_get_pkg_cons( PG_FUNCTION_ARGS );
 Datum pldbg_abort_target( PG_FUNCTION_ARGS );
