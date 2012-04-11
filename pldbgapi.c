@@ -695,11 +695,8 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 		debugSession * session 	   = defaultSession( PG_GETARG_SESSION( 0 ));
 		int32		   frameNumber = PG_GETARG_INT32( 1 );
 		char		   frameString[12];		/* sign, 10 digits, '\0' */
-		char		 * values[3];
 		char         * resultString;
-		char		 * ctx = NULL;
-		HeapTuple	   result;
-		TupleDesc	   tupleDesc = RelationNameGetTupleDesc( TYPE_NAME_BREAKPOINT );
+		Datum		   result;
 
 		sprintf( frameString, "%s %d", PLDBG_SELECT_FRAME, frameNumber );
 
@@ -707,14 +704,9 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 
 		resultString = getNString( session );
 
-		values[0] = tokenize( resultString, ":", &ctx );  		/* funtion OID 		*/
-		values[1] = tokenize( NULL, ":", &ctx );  				/* linenumber		*/
-		values[2] = tokenize( NULL, ":", &ctx );  				/* targetName		*/
-
-		result = BuildTupleFromCStrings( TupleDescGetAttInMetadata( tupleDesc ), values );
+		result = buildBreakpointDatum( resultString );
 	
-		PG_RETURN_DATUM( HeapTupleGetDatum( result ));
-
+		PG_RETURN_DATUM( result );
 	}
 }
 
