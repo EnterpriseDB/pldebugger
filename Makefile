@@ -8,10 +8,6 @@
 ##	  pldbgapi.so		     - a set of functions that form an SQL interface to
 ##							   the PL/pgSQL debugger
 ##
-##    plugin_tracer.so	     - a PL/pgSQL interpreter plugin that can trace the 
-##							   code path (and variable values) through the 
-##							   PL/pgSQL code executed by a backend
-##
 ##	  plugin_profiler.so	 - a PL/pgSQL plugin that profiles the execution
 ##							   of all PL/pgSQL code executed by a backend
 ##
@@ -33,7 +29,7 @@
 ## for full details
 
 SHAREDLIBS      = pldbgapi targetinfo
-PLUGINS         = plugin_debugger plugin_profiler # plugin_tracer
+PLUGINS         = plugin_debugger plugin_profiler
 INSTALL_scripts = pldbgapi.sql
 DOCS		    = README.pldebugger README.plprofiler
 
@@ -143,22 +139,3 @@ endif
 ##
 
 plugin_profiler$(DLSUFFIX):     CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src
-#plugin_tracer$(DLSUFFIX):       CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src
-
-
-#################################################################################
-## Convenience targets - these are here just in case you forget which target you 
-##                       really want to build
-##
-
-plugin_debugger: 		plugin_debugger$(DLSUFFIX)
-	@echo "complete (you probably wanted to make 'plugin_debugger.so' instead)"
-
-plugin_tracer: 			plugin_tracer$(DLSUFFIX)
-	@echo "complete (you probably wanted to 'make plugin_tracer.so' instead)"
-
-plugin_profiler:	 	plugin_profiler$(DLSUFFIX)
-	@echo "complete (you probably wanted to 'make plugin_profiler.so' instead)"
-
-pldbgapi: 				pldbgapi$(DLSUFFIX)
-	@echo "complete (you probably wanted to 'make pldbgapi.so' instead)"
