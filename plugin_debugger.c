@@ -186,6 +186,14 @@ void _PG_fini( void );				/* shutdown this module when we are dynamically unload
 /**********************************************************************
  * Local (hidden) function prototypes
  **********************************************************************/
+static void			dbg_send( int sock, const char *fmt, ... )
+#ifdef PG_PRINTF_ATTRIBUTE
+/* This extension allows gcc to check the format string for consistency with
+   the supplied arguments. */
+__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)))
+#endif
+	;
+
 static void 		 dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func );
 static void 		 dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
 static void 		 initialize_plugin_info( PLpgSQL_execstate * estate, PLpgSQL_function * func );
@@ -1618,13 +1626,13 @@ static void clearBreakpoint( PLpgSQL_execstate * frame, char * command )
 		breakpoint.key.targetPid  = MyProc->pid;
 
 		if( BreakpointDelete( BP_LOCAL, &breakpoint.key ))
-			dbg_send( per_session_ctx.client_w, "%s", "t", lineNo );
+			dbg_send( per_session_ctx.client_w, "t" );
 		else
-			dbg_send( per_session_ctx.client_w, "%s", "f", lineNo );
+			dbg_send( per_session_ctx.client_w, "f" );
 	}
 	else
 	{
-		dbg_send( per_session_ctx.client_w, "%s", "f" ); 
+		dbg_send( per_session_ctx.client_w, "f" ); 
 	}
 }
 
