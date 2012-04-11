@@ -211,7 +211,6 @@ static bool 		 handle_socket_error(void);
 static bool 		 parseTargetString( Oid * funcOID, char * targetString );
 static bool 		 parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpointString );
 static bool 		 addLocalBreakpoint( Oid funcOID, int lineNo );
-static char        * formatStringVA( const char * fmt, va_list args );
 static bool          varIsArgument( const PLpgSQL_execstate * frame, int varNo );
 
 static void			 reserveBreakpoints( void );
@@ -525,9 +524,9 @@ static uint32 resolveHostName( const char * hostName )
  *
  *	This function writes a formatted, counted string to the
  *	given stream.  The argument list for this function is identical to
- *  	the argument list for the fprintf() function - you provide a socket,
+ *	the argument list for the fprintf() function - you provide a socket,
  *	a format string, and then some number of arguments whose meanings 
- * 	are defined by the format string.
+ *	are defined by the format string.
  *
  *	NOTE:  the server-side of the debugger uses this function to send
  *		   data to the client side.  If the connection drops, dbg_send()
@@ -535,49 +534,52 @@ static uint32 resolveHostName( const char * hostName )
  *		   server-side can respond properly.
  */
 
-static void dbg_send( int sock, ... )
+static void dbg_send( int sock, const char *fmt, ... )
 {
-	va_list   args;
-	char 	* fmt = NULL;
-	size_t    len;
-	size_t    remaining;
+	StringInfoData	result;
+	char		   *data;
+	size_t			remaining;
 	
-	if( sock )
+	if( !sock )
+		return;
+
+	initStringInfo(&result);
+
+	for (;;)
 	{
-		char * buf;
-		char * data;
-		
-		va_start( args, sock );
+		va_list	args;
+		bool	success;
 
-		/*lint -save -e64 */
-		fmt = va_arg( args, char * );
-		/*lint -restore */
+		va_start(args, fmt);
+		success = appendStringInfoVA(&result, fmt, args);
+		va_end(args);
 
-		buf = formatStringVA( fmt, args );
+		if (success)
+			break;
 
-		va_end( args );
+		enlargeStringInfo(&result, result.maxlen);
+	}
 
-		len  = remaining = strlen( buf );
-		data = buf;
+	data = result.data;
+	remaining = strlen(data);
 
-		sendUInt32( sock, len );
-		
-		while( remaining > 0 )
-		{
-			int written = send( sock, data, remaining, 0 );
+	sendUInt32(sock, remaining);
+
+	while( remaining > 0 )
+	{
+		int written = send( sock, data, remaining, 0 );
 			
-			if(written < 0)
-			{	
-				handle_socket_error();
-				continue;
-			}
-			
-			remaining -= written;
-			data      += written;
+		if(written < 0)
+		{	
+			handle_socket_error();
+			continue;
 		}
 
-		pfree( buf );
+		remaining -= written;
+		data      += written;
 	}
+
+	pfree(result.data);
 }
 
 /*
@@ -2775,59 +2777,6 @@ static bool handle_socket_error(void)
 static Oid funcGetOid( PLpgSQL_function * func )
 {
 	return( func->fn_oid );
-}
-
-/*******************************************************************************
- * formatStringVA()
- *
- *	This function allocates enough space to hold a formatted string and the 
- *  builds the formatted string from the format specifier (fmt) and variable
- *	argument list (args).
- *
- *	This function is a (hopefully) portable, PostgreSQL-friendly version of 
- *	vasprintf() (a GNU extension).
- */
-
-static char* formatStringVA( const char * fmt, va_list args )
-{
-	char          * result;
-	size_t			required;
-	va_list			argsCopy;
-#ifdef sun
-    char            sc;
-#endif
-
-
-#ifdef WIN32
-	argsCopy = args;
-	required = _vsnprintf(NULL, 0, fmt, args);
-#elif sun
-    /*
-     * We need to handle Sun's libc implementation quirks differently.
-     * Although vsnprintf(...), in Solaris 10, takes care of the return
-     * value for size = 0 problem (changed from SUSv2 to SUSv3); however
-     * the issue with str = NULL prevails.
-     *
-     * With this single fix, we can address both:
-     */
-	va_copy(argsCopy, args);
-    required = vsnprintf(&sc, 1, fmt, args);
-#else
-	va_copy(argsCopy, args);
-	required = vsnprintf(NULL, 0, fmt, args);
-#endif
-
-	result = (char *)palloc( required + 1 );
-	
-#ifdef WIN32
-	_vsnprintf(result, required + 1, fmt, argsCopy);
-#else
-	vsnprintf(result, required + 1, fmt, argsCopy);
-#endif
-
-	va_end(argsCopy);
-
-	return(result);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
