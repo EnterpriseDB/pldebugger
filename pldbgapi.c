@@ -362,7 +362,8 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	targetProtoVersion = getNString( session, NULL );
 
-	pfree( targetProtoVersion );
+	if( targetProtoVersion )
+		pfree( targetProtoVersion );
 
 	/*
 	 * For convenience, remember the most recent session - if you call
@@ -569,7 +570,7 @@ static Datum buildBreakpointDatum( char * breakpointString )
 	char         * ctx = NULL;
 	HeapTuple	   result;
 	TupleDesc	   tupleDesc = RelationNameGetTupleDesc( TYPE_NAME_BREAKPOINT );
-	
+
 	values[0] = tokenize( breakpointString, ":", &ctx );  	/* function OID		*/
 	values[1] = tokenize( NULL, ":", &ctx );  				/* linenumber		*/
 	values[2] = tokenize( NULL, ":", &ctx );				/* targetName		*/
@@ -1228,6 +1229,9 @@ static char * tokenize( char * src, const char * delimiters, char ** ctx )
 	if( delimiters == NULL )
 		return( src );
 
+	if( src == NULL )
+		elog(ERROR, "debugger protocol error: token expected");
+
 	/*
 	 *	Skip past any leading delimiters
 	 */
@@ -1423,6 +1427,9 @@ static bool getBool( debugSession * session )
 	bool   result;
 
 	str = getNString( session, NULL );
+
+	if (str == NULL)
+		elog(ERROR, "debugger protocol error; bool expected");
 
 	if( str[0] == 't' )
 		result = TRUE;
