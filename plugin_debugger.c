@@ -204,7 +204,7 @@ static bool 		 getBool( int channel );
 static char        * getNString( int channel );
 static void 		 sendString( int channel, char * src );
 static void        * writen( int peer, void * src, size_t len );
-static void 	     dbg_read_str( int channel, char * dst, size_t len );
+static char 	   * dbg_read_str( int channel );
 static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const char * var_name, int lineno, int * index );
 static void 	     dbg_printvar( PLpgSQL_execstate * estate, const char * var_name, int lineno );
 static bool 		 breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, int lineNumber );
@@ -364,19 +364,24 @@ static uint32 readUInt32( int channel )
  * dbg_read_str()
  *
  *	This function reads a counted string from the given stream
- *	dbg_read_str() will read, at most, len bytes.
+ *	Returns a palloc'd, null-terminated string.
  *
  *	NOTE: the server-side of the debugger uses this function to read a 
  *		  string from the client side
  */
 
-static void dbg_read_str( int sock, char * dst, size_t len )
+static char *dbg_read_str( int sock )
 {
+	uint32 len;
+	char *dst;
+
 	len = readUInt32( sock );
 
+	dst = palloc(len + 1);
 	readn( sock, dst, len );
 	
 	dst[len] = '\0';
+	return dst;
 }
 
 /*
@@ -1196,7 +1201,7 @@ static bool connectAsServer( void )
 		uint32	proxyPID;
 		PGPROC *proxyOff;
 		PGPROC *proxyProc;
-		char	proxyProtoVersion[ sizeof( TARGET_PROTO_VERSION ) + 1 ];
+		char   *proxyProtoVersion;
 			
 		/* and wait for the debugger client to attach to us */
 		if(( client_sock = accept( sockfd, (struct sockaddr *)&cli_addr, &cli_addr_len )) < 0 )
@@ -1252,7 +1257,8 @@ static bool connectAsServer( void )
 		 * The proxy now sends it's protocol version and we
 		 * reply with ours
 		 */
-		dbg_read_str( per_session_ctx.client_w, proxyProtoVersion, sizeof( proxyProtoVersion ));
+		proxyProtoVersion = dbg_read_str( per_session_ctx.client_w );
+		pfree(proxyProtoVersion);
 		dbg_send( per_session_ctx.client_w, "%s", TARGET_PROTO_VERSION );
 		
 		return( TRUE );
@@ -2458,7 +2464,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 		if( dbg_info->stepping )
 		{
 			bool	need_more     = TRUE;
-			char	command[1024] = {0};
+			char   *command;
 
 			/*
 			 * Make sure that we have all of the debug info that we need in this stack frame
@@ -2479,11 +2485,8 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			 */
 			while( need_more )
 			{
-				//Fog Bug: 2079 
-				memset((void*)command, 0, sizeof(command));
-				
 				/* Wait for a command from the debugger client */
-				dbg_read_str( per_session_ctx.client_r, command, sizeof( command ));
+				command = dbg_read_str( per_session_ctx.client_r );
 
 				/*
 				 * The debugger client sent us a null-terminated command string
@@ -2607,6 +2610,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 					default:
 						elog(WARNING, "Unrecognized message %c", command[0]);
 				}
+				pfree(command);
 			}
 		}
 	}
