@@ -487,6 +487,7 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 			close( session->serverSocket );
 #endif
 			session->serverSocket = -1;
+			PG_RETURN_NULL();
 		}
 
 		/*
@@ -758,7 +759,7 @@ Datum pldbg_get_source( PG_FUNCTION_ARGS )
 #endif
 
 	memcpy(VARDATA(result), source, sourceLength);
-	
+
 	PG_RETURN_TEXT_P(result);
 }
 
