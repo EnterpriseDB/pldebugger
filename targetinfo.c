@@ -6,13 +6,10 @@
  *  Specifically, pldbg_get_target_info() returns a tuple of type targetinfo
  *  (see pldbgapi.sql).  
  *
- *  You can call pldbg_get_target_info() with a function/trigger name, the 
- *  OID of the pg_proc (or pg_trigger) tuple of the desired function/trigger, 
- *  or the signature (such as 'my_factorial(int)') of the desired function.
- *
- *  If the target name is not fully qualified, this function performs a search-path
- *  search for the requested name.  If the target name is not a signature, this 
- *  function will throw an error on any ambiguity.
+ *  You call pldbg_get_target_info() with the OID of the pg_proc tuple of the
+ *  desired function/trigger. We used to support lookups using
+ *  function/procedure name or trigger oid, but those modes have been removed
+ *  as no-one was using them. 'o' is now the only valid 2nd argument.
  *
  * Copyright (c) 2004-2007 EnterpriseDB Corporation. All Rights Reserved.
  *
@@ -25,25 +22,15 @@
 #include "funcapi.h"
 #include "utils/memutils.h"
 #include "utils/builtins.h"
-#include "utils/fmgroids.h"							/* For F_NAMEEQ					*/
 #include "utils/array.h"							/* For DatumGetArrayTypePCopy()	*/
-#include "storage/ipc.h"							/* For on_proc_exit()  			*/
-#include "storage/proc.h"							/* For MyProc		   			*/
-#include "libpq/libpq-be.h"							/* For Port						*/
-#include "miscadmin.h"								/* For MyProcPort				*/
 #include  "utils/catcache.h"
 #include  "utils/syscache.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/namespace.h"
-#include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
-#include "catalog/indexing.h"						/* For TriggerRelidNameIndexId	*/
-#include "globalbp.h"
-#include "parser/parse_type.h"						/* For parseTypeString()		*/
 #include "access/heapam.h"							/* For heap_form_tuple()		*/
 #include "access/genam.h"
-#include "access/hash.h"							/* For dynahash stuff			*/
 #include "utils/tqual.h"
 
 /*
@@ -67,7 +54,6 @@ typedef struct
 {
 	/* Input values */
 	char  * rawName;				/* Raw target name given by the user 								*/
-	char	targetType;				/* f(unction), p(rocedure), o(id), or t(rigger)						*/
 
 	/* Results */
 	int		 nargs;				/* Number of arguments expected by the target function/procedure		*/
@@ -81,25 +67,14 @@ typedef struct
 	char   * fqName;			/* Fully-qualified name (schema.package.target or schema.target)		*/
 	bool	 returnsSet;		/* TRUE -> target returns SETOF values									*/
 	Oid		 returnType;		/* OID of pg_type which corresponds to target return type				*/
-
-	/* Working context */
-	List   *   names;			/* Parsed-out name components (schema, target)							*/
-	char  	 * schemaName;		/* Schema name															*/
-	char  	 * funcName;		/* Function/procedure name												*/
-	CatCList * catlist;			/* SysCacheList to release when finished								*/
 } targetInfo;
 
-static bool 		  	 getTargetDef( targetInfo * info );
-static bool 		  	 getGlobalTarget( targetInfo * info );
 static bool 		  	 getTargetFromOid( targetInfo * info );
-static Oid 			  	 getTriggerFuncOid( const char * triggerName );
-static void 		  	 parseNameAndArgTypes( const char *string, const char *caller, bool allowNone, List **names, int *nargs, Oid *argtypes );
 static Form_pg_namespace getSchemaForm( Oid schemaOid, HeapTuple * tuple );
 static Form_pg_proc      getProcFormByOid( Oid procOid, HeapTuple * tuple );
 static void 		     completeProcTarget( targetInfo * info, HeapTuple proctup );
 static char 		   * makeFullName( Oid schemaOID, char * targetName );
 static TupleDesc	  	 getResultTupleDesc( FunctionCallInfo fcinfo );
-static List            * parseNames(const char * string);
 
 PG_FUNCTION_INFO_V1( pldbg_get_target_info );		/* Get target name, argtypes, pkgOid, ...		*/
 
@@ -156,6 +131,7 @@ Datum pldbg_get_target_info( PG_FUNCTION_ARGS )
 	Datum		values[11] = {0};
 	bool		nulls[11]  = {0};
 	HeapTuple	result;
+	char		targetType;
 
 	/*
 	 * Since we have to search through a lot of different tables to satisfy all of the 
@@ -164,13 +140,20 @@ Datum pldbg_get_target_info( PG_FUNCTION_ARGS )
 	 * that around instead of managing a huge argument list.
 	 */
 	info.rawName    = GET_STR( PG_GETARG_TEXT_P( 0 ));
-	info.targetType = PG_GETARG_CHAR( 1 );
+
+	/* We only support 'o' as target type, meaning look up by oid */
+	targetType = PG_GETARG_CHAR( 1 );
+	if (targetType != 'c')
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid target type"),
+				 errhint("Only valid target type is 'c'")));
 
 	/*
-	 * getTargetDef() figures out what kind of search to embark upon - let it
-	 * take care of the tough stuff.
+	 * Let getTargetFromOid() fill in the information in the struct.
 	 */
-	if( !getTargetDef( &info ))
+	info.targetOid = atol( info.rawName );
+	if( !getTargetFromOid( &info ))
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION), errmsg("function %s does not exist", info.rawName )));
 
 	/*
@@ -203,89 +186,6 @@ Datum pldbg_get_target_info( PG_FUNCTION_ARGS )
 	result = heap_form_tuple( tupleDesc, values, nulls );
 
 	PG_RETURN_DATUM( HeapTupleGetDatum( result ));	   
-}
-
-/******************************************************************************
- * getTargetDef()
- *
- *	This is a helper function for pldbg_get_target_info() - it figures out what
- *	kind of search is needed, based on the string given by the caller. If the
- *	caller gave us an OID (or a pair of OID's), we let getTargetFromOid()
- *	retrieve the required information. If the caller gave us a name, we simply
- *  call getGlobalTarget().
- *
- *	If any of the helper functions (that we call) perform a syscache search,
- *	we take care of releasing the resources here.
- */
-
-static bool getTargetDef( targetInfo * info )
-{
-	bool result;
-
-	if( info->targetType == 'o' )
-	{
-		info->targetOid = atol( info->rawName );
-
-		result = getTargetFromOid( info );
-	}
-	else if( info->targetType == 't' )
-	{
-		/*
-		 * The user gave us a trigger name.  Get the pg_trigger tuple and then 
-		 * treat this is a an 'oid' target
-		 */
-		
-		if(( info->targetOid = getTriggerFuncOid( info->rawName )) == InvalidOid )
-			elog( ERROR, "unknown trigger name(%s)", info->rawName );
-
-		result = getTargetFromOid( info );
-	}
-	else
-	{
-		/*
-		 * The user gave us a function - it may be schema-qualified.  Let
-		 * parseNameAndArgTypes() figure out which name components are 
-		 * present
-		 */
-		
-		result = getGlobalTarget( info );
-
-		if( info->catlist )
-			ReleaseSysCacheList( info->catlist );
-	}
-		
-	return( result );
-}
-
-static Oid getTriggerFuncOid( const char * triggerName )
-{
-	Oid			result = InvalidOid;
-	Relation    tgrel  = heap_open( TriggerRelationId, AccessShareLock );
-	ScanKeyData skey;
-	SysScanDesc tgscan;
-
-	ScanKeyInit( &skey, Anum_pg_trigger_tgname, BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum( triggerName ));
-
-	tgscan = systable_beginscan( tgrel, TriggerRelidNameIndexId, false, SnapshotNow, 1, &skey );
-
-	while( true )
-	{
-		HeapTuple tup = systable_getnext( tgscan );
-	
-		if( HeapTupleIsValid( tup ))
-		{
-			Form_pg_trigger	trigger = (Form_pg_trigger) GETSTRUCT( tup );
-
-			result = trigger->tgfoid;
-		}
-		else
-			break;
-	}
-
-	systable_endscan(tgscan);
-	heap_close(tgrel, AccessShareLock);
-
-	return( result );
 }
 
 /*******************************************************************************
@@ -434,14 +334,9 @@ static void completeProcTarget( targetInfo * info, HeapTuple proctup )
 /*******************************************************************************
  * getTargetFromOid()
  *
- *	This function is called by getTargetDef() when the user gives a string that
- *  contains only digits and colons - in that case, we assume that the user
- *	gave us a single OID.
- *
  *	Given an OID, we fill in the given targetInfo structure with a	bunch of 
  *  information about that target.
  */
-
 static bool getTargetFromOid( targetInfo * info ) 
 {
 	HeapTuple	 procTuple;
@@ -455,332 +350,6 @@ static bool getTargetFromOid( targetInfo * info )
 	ReleaseSysCache( procTuple );
 
 	return( TRUE );
-}
-
-/*******************************************************************************
- * getProcOidBySig()
- *
- *	This helper function is called (indirectly) by pldbg_get_target_info() to 
- *	retrieve the OID of the pg_proc tuple that corresponds to the given 
- *  signature.  This is a slightly modified version of regprocedurein().
- */
-
-static Oid getProcOidBySig( const char * pro_name_or_oid, char targetType )
-{
-	List	   		  *names;
-	int				   nargs;
-	Oid				   argtypes[FUNC_MAX_ARGS];
-	FuncCandidateList  clist;
-	
-	/* '-' ? */
-	if (strcmp(pro_name_or_oid, "-") == 0)
-		PG_RETURN_OID(InvalidOid);
-
-	/* Numeric OID? */
-	if (pro_name_or_oid[0] >= '0' &&
-		pro_name_or_oid[0] <= '9' &&
-		strspn(pro_name_or_oid, "0123456789") == strlen(pro_name_or_oid))
-	{
-		return( DatumGetObjectId(DirectFunctionCall1(oidin, CStringGetDatum(pro_name_or_oid))));
-	}
-
-	/*
-	 * Else it's a name and arguments.  Parse the name and arguments, look up
-	 * potential matches in the current namespace search list, and scan to see
-	 * which one exactly matches the given argument types.	(There will not be
-	 * more than one match.)
-	 *
-	 * XXX at present, this code will not work in bootstrap mode, hence this
-	 * datatype cannot be used for any system column that needs to receive
-	 * data during bootstrap.
-	 */
-	parseNameAndArgTypes(pro_name_or_oid, "regprocedurein", false,
-						 &names, &nargs, argtypes);
-
-#if (PG_VERSION_NUM >= 80500)
-	clist = FuncnameGetCandidates(names, nargs, false, false, false);
-#else
-	clist = FuncnameGetCandidates(names, nargs, false, false);
-#endif
-
-	for (; clist; clist = clist->next)
-	{
-		if (memcmp(clist->args, argtypes, nargs * sizeof(Oid)) == 0)
-			break;
-	}
-
-	if (clist == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_FUNCTION),
-				 errmsg("function \"%s\" does not exist", pro_name_or_oid)));
-
-	return( clist->oid );
-}
-
-/*******************************************************************************
- * getProcOidByName()
- *
- *	This helper function is called (indirectly) by pldbg_get_target_info() to 
- *	retrieve the OID of the pg_proc tuple that corresponds to the given 
- *  name.  This is a slightly modified version of regprocin().
- */
-
-static Oid getProcOidByName(const char * pro_name_or_oid, char targetType )
-{
-	List	   		  *names;
-	FuncCandidateList  clist;
-
-	/* '-' ? */
-	if (strcmp(pro_name_or_oid, "-") == 0)
-		PG_RETURN_OID(InvalidOid);
-
-	/* Numeric OID? */
-	if (pro_name_or_oid[0] >= '0' &&
-		pro_name_or_oid[0] <= '9' &&
-		strspn(pro_name_or_oid, "0123456789") == strlen(pro_name_or_oid))
-	{
-		return( DatumGetObjectId(DirectFunctionCall1(oidin, CStringGetDatum(pro_name_or_oid))));
-	}
-
-	/* Else it's a name, possibly schema-qualified 
-	 *
-	 * Parse the name into components and see if it matches any
-	 * pg_proc entries in the current search path.
-	 */
-	names = parseNames(pro_name_or_oid);
-#if (PG_VERSION_NUM >= 80500)
-	clist = FuncnameGetCandidates(names, -1, false, false, false);
-#else
-	clist = FuncnameGetCandidates(names, -1, false, false);
-#endif
-
-	if (clist == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_FUNCTION),
-				 errmsg("function \"%s\" does not exist", pro_name_or_oid)));
-	else if (clist->next != NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_AMBIGUOUS_FUNCTION),
-				 errmsg("more than one function named \"%s\"",
-						pro_name_or_oid)));
-
-	return( clist->oid );
-}
-
-/*******************************************************************************
- * getGlobalTarget()
- *
- *	This helper function is called (indirectly) by pldbg_get_target_info() to 
- *	retreive information about a function or procedure that is *not* defined 
- *	within a package.
- *
- *	If the user gave us a specific schema name, we look for a target within
- *  that schema.  Otherwise, we search through the current search_path for 
- *	a match.
- *
- *	If we find a match, we fill in the targetInfo structure with information
- *  about the target that we've identified.
- */
-
-static bool getGlobalTarget( targetInfo * info )
-{
-	bool	inQuote = false;
-	char  * ptr;
-
-	for( ptr = info->rawName; *ptr; ptr++ )
-	{
-		if( *ptr == '"' )
-			inQuote = !inQuote;
-		else if( *ptr == '(' && !inQuote )
-			break;
-	}
-
-	if( *ptr == '\0' )
-	{
-		/* 
-		 * The user gave us function/procedure name without an
-		 * argument list (i.e. 'foo').
-		 */
-		info->targetOid = getProcOidByName( info->rawName, info->targetType );
-	}
-	else
-	{
-		/* 
-		 * The user gave us a function/procedure name with an 
-		 * argument list (i.e. 'foo(int, text)', or 'foo()')
-		 */
-		info->targetOid = getProcOidBySig( info->rawName, info->targetType );
-	}
-
-	return( getTargetFromOid( info ));
-}
-
-/*******************************************************************************
- * parseNameAndArgTypes()
- *
- *	This helper function parses the given string and returns a list of names 
- *	(schema and target), a count of the number of arguments present
- *  in the signature, and an array of OID's for the argument types.
- *
- *	You can call this function with a fully-qualified name (schema.target, or
- *  an unqualified name (target).  
- *
- *  You can also call this function with a list of argument types 
- *  (myfoo( int, real )) or without a list of argument types (myfoo).  
- *
- *  If you provide a complete signature (that is, you include argument types),
- *  *nargs is set to the number of arguments and *argtypes is filled in with
- *  the resolved OID of each type.  This function takes care of translating 
- *  typename synonyms for you - so you can call it with: myfoo(int) or 
- *  myfoo(integer).
- *
- *  If you don't provide a complete signature, *nargs is set to -1.
- *
- *	NOTE: this function borrows heavily from the parseNameAndArgTypes()
- *        function in regproc.c. That function will not accept a string
- *		  that does not include a complete signature - we do.
- */
-
-static void parseNameAndArgTypes( const char *string, const char *caller, bool allowNone, List **names, int *nargs, Oid *argtypes )
-{
-	char	   *rawname;
-	char	   *ptr;
-	char	   *ptr2;
-	char	   *typename;
-	bool		in_quote;
-	bool		had_comma;
-	int			paren_count;
-	Oid			typeid;
-	int32		typmod;
-
-	/* We need a modifiable copy of the input string. */
-	rawname = pstrdup(string);
-
-	/* Scan to find the expected left paren; mustn't be quoted */
-	in_quote = false;
-	for (ptr = rawname; *ptr; ptr++)
-	{
-		if (*ptr == '"')
-			in_quote = !in_quote;
-		else if (*ptr == '(' && !in_quote)
-			break;
-	}
-
-	if (*ptr == '\0')
-	{
-		/* This is a function/name only, not a signature. */
-		*names = parseNames(rawname);
-		*nargs = -1;
-		return;
-	}
-
-	/* Separate the name and parse it into a list */
-	*ptr++ = '\0';
-	*names = parseNames(rawname);
-
-	/* Check for the trailing right parenthesis and remove it */
-	ptr2 = ptr + strlen(ptr);
-	while (--ptr2 > ptr)
-	{
-		if (!isspace((unsigned char) *ptr2))
-			break;
-	}
-	if (*ptr2 != ')')
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				 errmsg("expected a right parenthesis")));
-
-	*ptr2 = '\0';
-
-	/* Separate the remaining string into comma-separated type names */
-	*nargs = 0;
-	had_comma = false;
-
-	for (;;)
-	{
-		/* allow leading whitespace */
-		while (isspace((unsigned char) *ptr))
-			ptr++;
-		if (*ptr == '\0')
-		{
-			/* End of string.  Okay unless we had a comma before. */
-			if (had_comma)
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-						 errmsg("expected a type name")));
-			break;
-		}
-		typename = ptr;
-		/* Find end of type name --- end of string or comma */
-		/* ... but not a quoted or parenthesized comma */
-		in_quote = false;
-		paren_count = 0;
-		for (; *ptr; ptr++)
-		{
-			if (*ptr == '"')
-				in_quote = !in_quote;
-			else if (*ptr == ',' && !in_quote && paren_count == 0)
-				break;
-			else if (!in_quote)
-			{
-				switch (*ptr)
-				{
-					case '(':
-					case '[':
-						paren_count++;
-						break;
-					case ')':
-					case ']':
-						paren_count--;
-						break;
-				}
-			}
-		}
-		if (in_quote || paren_count != 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-					 errmsg("improper type name")));
-
-		ptr2 = ptr;
-		if (*ptr == ',')
-		{
-			had_comma = true;
-			*ptr++ = '\0';
-		}
-		else
-		{
-			had_comma = false;
-			Assert(*ptr == '\0');
-		}
-		/* Lop off trailing whitespace */
-		while (--ptr2 >= typename)
-		{
-			if (!isspace((unsigned char) *ptr2))
-				break;
-			*ptr2 = '\0';
-		}
-
-		if (allowNone && pg_strcasecmp(typename, "none") == 0)
-		{
-			/* Special case for NONE */
-			typeid = InvalidOid;
-			typmod = -1;
-		}
-		else
-		{
-			/* Use full parser to resolve the type name */
-			parseTypeString(typename, &typeid, &typmod);
-		}
-		if (*nargs >= FUNC_MAX_ARGS)
-			ereport(ERROR,
-					(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
-					 errmsg("too many arguments")));
-
-		argtypes[*nargs] = typeid;
-		(*nargs)++;
-	}
-
-	pfree(rawname);
 }
 
 /*******************************************************************************
@@ -809,22 +378,4 @@ static TupleDesc getResultTupleDesc( FunctionCallInfo fcinfo )
 						"that cannot accept type record")));
 	}
 	return( rsinfo->expectedDesc );
-}
-
-/*******************************************************************************
- * parseNames()
- *
- *  This functions provides a version-neutral wrapper around the 
- *  stringToQualifiedNameList() function.  The signature for 
- *  stringToQualifiedNameList() changed between 8.2 and 8.3 - the second 
- *  argument was never very valuable anyway.
- */
-
-static List * parseNames( const char * string )
-{
-#if PG_VERSION_NUM >= 80300
-	return stringToQualifiedNameList(string);
-#else
-	return stringToQualifiedNameList(string, "parseNames");
-#endif
 }
