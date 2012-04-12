@@ -1,6 +1,11 @@
 --
 -- This script uninstalls the PL/PGSQL debugger API.
 --
+-- Note: this isn't needed on 9.1 and above, as the functions and types are
+-- packaged in an extension. You can just drop the extension with
+-- DROP EXTENSION command. This is still needed to uninstall on older
+-- versions, however.
+--
 
 DROP FUNCTION pldbg_get_target_info(TEXT, "char");
 DROP FUNCTION pldbg_wait_for_target(INTEGER);

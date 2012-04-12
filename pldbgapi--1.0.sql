@@ -7,6 +7,9 @@
 --		http://www.opensource.org/licenses/artistic-license.php
 -- for full details
 
+\echo Installing pldebugger as unpackaged objects. If you are using PostgreSQL
+\echo version 9.1 or above, use "CREATE EXTENSION pldbgapi" instead.
+
 CREATE TYPE breakpoint AS ( func OID, linenumber INTEGER, targetName TEXT );
 CREATE TYPE frame      AS ( level INT, targetname TEXT, func OID, linenumber INTEGER, args TEXT );
 

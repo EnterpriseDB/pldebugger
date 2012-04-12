@@ -28,10 +28,11 @@
 ##		http://www.opensource.org/licenses/artistic-license.php
 ## for full details
 
+EXTENSION  = pldbgapi
 MODULES    = pldbgapi targetinfo
 PLUGINS    = plugin_debugger plugin_profiler
-DATA       = pldbgapi.sql
-DOCS		    = README.pldebugger README.plprofiler
+DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
+DOCS	   = README.pldebugger README.plprofiler
 
 subdir       = contrib/debugger
 top_builddir = ../..

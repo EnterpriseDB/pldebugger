@@ -9,6 +9,7 @@ III v1.10.0 and above.
 If you wish to debug functions on PostgreSQL 8.2 or 8.3, please use v0.93 of
 the debugger plugin, or checkout the PRE_8_4_SERVER branch from CVS.
 
+
 Installation
 ------------
 
@@ -21,8 +22,16 @@ Installation
 
   shared_preload_libraries = '$libdir/plugins/plugin_debugger'
 
-- (Re)start PostgreSQL, and run the pldbgapi.sql SQL script in the database or
-  databases that you wish to debug functions in.
+- Restart PostgreSQL for the new setting to take effect.
+
+- Run the following command in the database or databases that you wish to
+  debug functions in:
+
+  CREATE EXTENSION pldbgapi;
+
+  (on server versions older than 9.1, you must instead run the pldbg--1.0.sql
+  script directly using psql).
+
 
 Usage
 -----
@@ -36,6 +45,7 @@ and allow you to debug in-context.
 
 For further information, please see the pgAdmin documentation.
 
+
 Troubleshooting
 ---------------
 
@@ -46,6 +56,7 @@ which, the server *must* be restarted). This will prevent global breakpoints
 working on all platforms, and on some (notably Windows) may prevent the 
 pldbgapi.sql script from executing correctly.
 
+
 Licence
 -------
 
@@ -54,6 +65,7 @@ The pl/pgsql debugger API is released under the Artistic Licence.
     http://www.opensource.org/licenses/artistic-license.php
 
 Copyright (c) 2004-2010 EnterpriseDB Corporation. All Rights Reserved.
+
 
 Contact
 -------
