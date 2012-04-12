@@ -55,10 +55,20 @@ SHLIB_LINK      += $(BE_DLLLIBS)
 
 all:	$(addsuffix $(DLSUFFIX), $(PLUGINS))
 
+install: all installdirs installdir-plugins install-plugins
+
+clean: clean-plugins
+
+uninstall: uninstall-plugins
+
 install-plugins: installdir-plugins $(addsuffix $(DLSUFFIX), $(PLUGINS))
 	$(INSTALL_SHLIB) $(addsuffix $(DLSUFFIX), $(PLUGINS)) '$(DESTDIR)$(pkglibdir)/plugins/'
 
-install: all installdirs installdir-plugins install-plugins
+clean-plugins:
+	rm -f $(addsuffix $(DLSUFFIX), $(PLUGINS)) $(addsuffix .o, $(PLUGINS))
+
+uninstall-plugins:
+	rm -f $(addprefix '$(DESTDIR)$(pkglibdir)'/plugins/, $(addsuffix $(DLSUFFIX), $(PLUGINS)))
 
 # MKDIR_P replaced mkinstalldirs in PG8.5+
 installdir-plugins:
