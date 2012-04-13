@@ -85,7 +85,24 @@ installdir-plugins:
 ##
 ## 
 
-plugin_debugger$(DLSUFFIX): 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src
+plugin_debugger$(DLSUFFIX): 	CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
+
+
+################################################################################
+## If we're building against EnterpriseDB's Advanced Server, also build a
+## debugger module for the SPL language. It's pretty much the same as the
+## PL/pgSQL one, but the structs have some extra fields and are thus not
+## binary-compatible. We make a copy of the .c file, and pass the
+## INCLUDE_PACKAGE_SUPPORT=1 flag to compile it against SPL instead of PL/pgSQL
+##
+## To enable this, you need to run make as "make INCLUDE_PACKAGE_SUPPORT=1"
+## 
+ifdef INCLUDE_PACKAGE_SUPPORT
+plugin_spl_debugger.c:  plugin_debugger.c
+	$(SYMLINKCMD) $(module_srcdir)plugin_debugger.c plugin_spl_debugger.c
+
+plugin_spl_debugger$(DLSUFFIX): 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1 -I$(top_builddir)/src/pl/edb-spl/src
+endif
 
 ################################################################################
 ## Rules for making the pldbgapi
