@@ -82,32 +82,34 @@ PG_MODULE_MAGIC;
  **********************************************************************/
 
 /*
- * We use a var_value structure to record  a little extra information about each variable. 
+ * We use a var_value structure to record  a little extra information about
+ * each variable. 
  */
 
 typedef struct
 {
-    bool	    isnull;						/* TRUE -> this variable IS NULL				*/
-	bool		visible;					/* hidden or visible? see is_visible_datum() 	*/
-	bool		duplicate_name;				/* Is this one of many vars with same name?		*/
+    bool	    isnull;			/* TRUE -> this variable IS NULL */
+	bool		visible;		/* hidden or visible? see is_visible_datum() */
+	bool		duplicate_name;	/* Is this one of many vars with same name? */
 } var_value;
 
 /*
- * When the debugger decides that it needs to step through (or into) a particular function 
- * invocation, it allocates a dbg_ctx and records the address of that structure in the
- * executor's context structure (estate->plugin_info).
+ * When the debugger decides that it needs to step through (or into) a
+ * particular function invocation, it allocates a dbg_ctx and records the
+ * address of that structure in the executor's context structure
+ * (estate->plugin_info).
  *
- * The dbg_ctx keeps track of all of the information we need to step through code and
- * display variable values
+ * The dbg_ctx keeps track of all of the information we need to step through
+ * code and display variable values
  */
 
 typedef struct
 {
-    PLpgSQL_function *	func;				/* Function definition										*/
-    bool				stepping;			/* If TRUE, stop at next statement							*/
-    var_value	     *  symbols;			/* Extra debugger-private info about variables				*/
-	char			 ** argNames;			/* Argument names											*/
-	int					argNameCount;		/* Number of names pointed to by argNames					*/
+    PLpgSQL_function *	func;		/* Function definition */
+    bool				stepping;	/* If TRUE, stop at next statement */
+    var_value	     *  symbols;	/* Extra debugger-private info about variables */
+	char			 ** argNames;	/* Argument names */
+	int					argNameCount; /* Number of names pointed to by argNames */
 	void 			 (* error_callback)(void *arg);
 	void 			 (* assign_expr)( PLpgSQL_execstate *estate, PLpgSQL_datum *target, PLpgSQL_expr *expr );
 #if INCLUDE_PACKAGE_SUPPORT
@@ -161,9 +163,8 @@ typedef struct
  **********************************************************************/
 
 /* 
- * We keep one per_session_ctx structure per postmaster (that is, one structure per backend). 
- * This structure holds all of the stuff that we need to track from one function call to
- * the next.
+ * We keep one per_session_ctx structure per backend. This structure holds all
+ * of the stuff that we need to track from one function call to the next.
  */
 
 static struct
@@ -213,10 +214,8 @@ static bool 		 connectAsServer( void );
 static bool 		 connectAsClient( Breakpoint * breakpoint );
 static bool 		 is_datum_visible( PLpgSQL_datum * datum );
 static bool			 is_var_visible( PLpgSQL_execstate * frame, int var_no );
-static Oid			 funcGetOid(  PLpgSQL_function * func );
 static bool			 datumIsNull(PLpgSQL_datum *datum);
 static bool 		 handle_socket_error(void);
-static bool 		 parseTargetString( Oid * funcOID, char * targetString );
 static bool 		 parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpointString );
 static bool 		 addLocalBreakpoint( Oid funcOID, int lineNo );
 static bool          varIsArgument( const PLpgSQL_execstate * frame, int varNo );
@@ -286,9 +285,9 @@ PG_FUNCTION_INFO_V1(OID_DEBUG_FUNCTION);
 
 Datum OID_DEBUG_FUNCTION(PG_FUNCTION_ARGS)
 {
-	Oid			  funcOid = InvalidOid;		/* Initialize to keep compiler happy */
-	HeapTuple		  tuple;
-	Oid			  userid;
+	Oid			funcOid;
+	HeapTuple	tuple;
+	Oid			userid;
 
 	if(( funcOid = PG_GETARG_OID( 0 )) == InvalidOid )
 		ereport( ERROR, ( errcode( ERRCODE_UNDEFINED_FUNCTION ), errmsg( "no target specified" )));
@@ -385,7 +384,7 @@ static char *dbg_read_str( int sock )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * writen()
  *
  *	This function writes exactly 'len' bytes to the given socket or it 
@@ -427,12 +426,12 @@ static void sendUInt32( int channel, uint32 val )
 	writen( channel, &netVal, sizeof( netVal ));
 }
 
-/*****************************************************************************************
+/*******************************************************************************
  * getBool()
  *
- *	getBool() retreives a boolean value (TRUE or FALSE) from the server.  We call this 
- *	function after we ask the server to do something that returns a boolean result (like
- *	deleting a breakpoint or depositing a new value).
+ *	getBool() retreives a boolean value (TRUE or FALSE) from the server.  We
+ *  call this function after we ask the server to do something that returns a
+ *  boolean result (like deleting a breakpoint or depositing a new value).
  */
 
 static bool getBool( int channel )
@@ -578,7 +577,7 @@ static void dbg_send( int sock, const char *fmt, ... )
 	while( remaining > 0 )
 	{
 		int written = send( sock, data, remaining, 0 );
-			
+
 		if(written < 0)
 		{	
 			handle_socket_error();
@@ -602,11 +601,10 @@ static void dbg_send( int sock, const char *fmt, ... )
  *
  *	In addition to returning a pointer to the requested source code, this
  *	function sets *tup to point to a HeapTuple (that you must release when 
- *	you are finished with it) and sets *funcName to point to the name of 
- *	the given function.
+ *	you are finished with it).
  */
 
-static char * findSource( Oid oid, HeapTuple * tup, char ** funcName )
+static char * findSource( Oid oid, HeapTuple * tup )
 {
 	bool	isNull;
 
@@ -614,8 +612,6 @@ static char * findSource( Oid oid, HeapTuple * tup, char ** funcName )
 
 	if(!HeapTupleIsValid( *tup ))
 		elog( ERROR, "pldebugger: cache lookup for proc %u failed", oid );
-
-	*funcName = NameStr(((Form_pg_proc) GETSTRUCT( *tup ))->proname );
 
 	return( DatumGetCString( DirectFunctionCall1( textout, SysCacheGetAttr( PROCOID, *tup, Anum_pg_proc_prosrc, &isNull ))));
 }
@@ -634,15 +630,14 @@ static void dbg_send_src( PLpgSQL_execstate * frame, char * command  )
 {
     HeapTuple			tup;
     char				*procSrc;
-	char				*funcName;
 	Oid					targetOid = InvalidOid;  /* Initialize to keep compiler happy */
 	TransactionId		xmin;
 	CommandId			cmin;
 
-	parseTargetString( &targetOid, command + 2 );
+	targetOid = atoi( command + 2 );
 
 	/* Find the source code for this function */
-	procSrc = findSource( targetOid, &tup, &funcName );
+	procSrc = findSource( targetOid, &tup );
 										
 	xmin = HeapTupleHeaderGetXmin( tup->t_data );
 
@@ -982,7 +977,7 @@ static void mark_duplicate_names( const PLpgSQL_execstate * estate, int var_no )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * completeFrame()
  *
  *	This function ensures that the given execution frame contains
@@ -1350,10 +1345,10 @@ static char ** fetchArgNames( PLpgSQL_function * func, int * nameCount )
 	if( func->fn_nargs == 0 )
 		return( NULL );
 
-	tup = SearchSysCache( PROCOID, ObjectIdGetDatum( funcGetOid( func )), 0, 0, 0 );
+	tup = SearchSysCache( PROCOID, ObjectIdGetDatum( func->fn_oid ), 0, 0, 0 );
 
 	if( !HeapTupleIsValid( tup ))
-		elog( ERROR, "edbspl: cache lookup for proc %u failed", funcGetOid( func ));
+		elog( ERROR, "edbspl: cache lookup for proc %u failed", func->fn_oid );
 
 	argnamesDatum = SysCacheGetAttr( PROCOID, tup, Anum_pg_proc_proargnames, &isNull );
 
@@ -1441,7 +1436,7 @@ static void send_plpgsql_frame( PLpgSQL_execstate * estate )
 #else
 					  func->fn_name,
 #endif
-					  funcGetOid( func ),
+					  func->fn_oid,
 					  stmt->lineno );
 
 	/*
@@ -1502,24 +1497,7 @@ static void send_stack( dbg_ctx * dbg_info )
 }
 
 /*
- * --------------------------------------------------------------------------------
- * parseTargetString()
- *
- *	Given a string that formatted like "funcOID", this 
- *	function parses out the two OID's and returns them to the 
- *	caller.  If the string is well-formatted, this function returns 
- *	TRUE, otherwise, we return FALSE.
- */
-
-static bool parseTargetString( Oid * funcOID, char * targetString )
-{
-	*funcOID = atoi(targetString);
-
-	return( TRUE );
-}
-
-/*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * parseBreakpoint()
  *
  *	Given a string that formatted like "funcOID:linenumber", 
@@ -1546,7 +1524,7 @@ static bool parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpointS
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * addLocalBreakpoint()
  *
  *	This function adds a local breakpoint for the given function and 
@@ -1569,7 +1547,7 @@ static bool addLocalBreakpoint( Oid funcOID, int lineNo )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * setBreakpoint()
  *
  *	The debugger client can set a local breakpoint at a given 
@@ -1599,7 +1577,7 @@ static void setBreakpoint( const PLpgSQL_execstate * frame, char * command )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * clearBreakpoint()
  *
  *	This function deletes the breakpoint at the package,
@@ -1640,7 +1618,7 @@ static void clearBreakpoint( PLpgSQL_execstate * frame, char * command )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * sendBreakpoints()
  *
  *	This function sends a list of breakpoints to the proxy process.
@@ -1656,7 +1634,7 @@ static void send_breakpoints( PLpgSQL_execstate * frame )
 {
 	dbg_ctx 		* dbg_info = (dbg_ctx *)frame->plugin_info;
 	Breakpoint      * breakpoint;
-	Oid			 	  funcOid  = funcGetOid( dbg_info->func );
+	Oid			 	  funcOid  = dbg_info->func->fn_oid;
 	HASH_SEQ_STATUS	  scan;
 
 	BreakpointGetList( BP_GLOBAL, &scan );
@@ -1688,7 +1666,7 @@ static void send_breakpoints( PLpgSQL_execstate * frame )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * send_vars()
  *	
  *	This function sends a list variables (names, types, values...)
@@ -1825,7 +1803,7 @@ static void send_vars( PLpgSQL_execstate * frame )
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ---------------------------------------------------------------------
  * select_frame()
  *
  *	This function changes the debugger focus to the indicated frame (in the call
@@ -1896,28 +1874,29 @@ static bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid fu
 		return( TRUE );
 	}
 
-/*
- *  We conduct 3 searches here.  
- *	
- *	First, we look for a global breakpoint at this line, targeting our
- *  specific backend process.
- *
- *  Next, we look for a global breakpoint (at this line) that does
- *  not target a specific backend process.
- *
- *	Finally, we look for a local breakpoint at this line (implicitly 
- *  targeting our specific backend process).
- *
- *	NOTE:  We must do the local-breakpoint search last because, when the proxy
- *		   attaches to our process, it marks all of its global breakpoints as 
- *		   busy (so other potential targets will ignore those breakpoints) and
- *		   we copy all of those global breakpoints into our local breakpoint
- *		   hash.  If the debugger client exits and the user starts another 
- *		   debugger session, we want to see the new breakpoints instead of our
- *		   obsolete local breakpoints (we don't have a good way to detect that
- *		   the proxy has disconnected until it's inconvenient - we have to read-
- *		   from or write-to the proxy before we can tell that it's died).
- */
+	/*
+	 *  We conduct 3 searches here.  
+	 *	
+	 *	First, we look for a global breakpoint at this line, targeting our
+	 *  specific backend process.
+	 *
+	 *  Next, we look for a global breakpoint (at this line) that does
+	 *  not target a specific backend process.
+	 *
+	 *	Finally, we look for a local breakpoint at this line (implicitly 
+	 *  targeting our specific backend process).
+	 *
+	 *	NOTE:  We must do the local-breakpoint search last because, when the
+	 *		   proxy attaches to our process, it marks all of its global
+	 *		   breakpoints as busy (so other potential targets will ignore
+	 *		   those breakpoints) and we copy all of those global breakpoints
+	 *		   into our local breakpoint hash.  If the debugger client exits
+	 *		   and the user starts another debugger session, we want to see the
+	 *		   new breakpoints instead of our obsolete local breakpoints (we
+	 *		   don't have a good way to detect that the proxy has disconnected
+	 *		   until it's inconvenient - we have to read-from or write-to the
+	 *		   proxy before we can tell that it's died).
+	 */
 
 	key.targetPid = MyProc->pid;		/* Search for a global breakpoint targeted at our process ID */
   
@@ -1967,7 +1946,7 @@ static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 		return;
 	}
 
-	if( !breakpointsForFunction( funcGetOid( func )) && !per_session_ctx.step_into_next_func)
+	if( !breakpointsForFunction( func->fn_oid ) && !per_session_ctx.step_into_next_func)
 	{
 		estate->plugin_info = NULL;
 		return;
@@ -1984,9 +1963,9 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
     estate->plugin_info = dbg_info = (dbg_ctx *) palloc( sizeof( dbg_ctx ));
 
 	/* 
-	 * As soon as we hit the first statement, we'll allocate space for each local variable 
-	 * For now, we set symbols to NULL so we know to report all variables the next
-	 * time we stop...
+	 * As soon as we hit the first statement, we'll allocate space for each
+	 * local variable. For now, we set symbols to NULL so we know to report all
+	 * variables the next time we stop...
 	 */
 	dbg_info->symbols  		 = NULL;
 	dbg_info->stepping 		 = FALSE;
@@ -2305,7 +2284,7 @@ static void send_cur_line( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 
 	dbg_send( per_session_ctx.client_w,
 			  "%d:%d:%s",
-			  funcGetOid( func ),
+			  func->fn_oid,
 			  stmt->lineno+1,
 #if (PG_VERSION_NUM >= 90200)
 			  func->fn_signature
@@ -2402,7 +2381,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			dbg_info->stepping 		 = FALSE; 	/* No longer stepping   */
 		}
 
-		if(( dbg_info->stepping ) || breakAtThisLine( &breakpoint, &breakpointScope, funcGetOid( dbg_info->func ), isFirstStmt( stmt, dbg_info->func ) ? -1 : stmt->lineno ))
+		if(( dbg_info->stepping ) || breakAtThisLine( &breakpoint, &breakpointScope, dbg_info->func->fn_oid, isFirstStmt( stmt, dbg_info->func ) ? -1 : stmt->lineno ))
 			dbg_info->stepping = TRUE;
 		else
 			return;
@@ -2652,8 +2631,8 @@ static bool datumIsNull(PLpgSQL_datum *datum)
 /* ---------------------------------------------------------------------
  * handle_socket_error()
  *
- * when invoked after a socket operation it would check socket operation's last error status 
- * and invoke siglongjmp incase the error is fatal. 
+ * when invoked after a socket operation it would check socket operation's
+ * last error status and invoke siglongjmp incase the error is fatal. 
  */
 static bool handle_socket_error(void)
 {
@@ -2789,19 +2768,6 @@ static bool handle_socket_error(void)
 #endif
 		
 	return abort;
-}
-
-/*
- * ---------------------------------------------------------------------
- * funcGetOid()
- *
- *	Returns the OID of a function/procedure given a PLpgSQL_function 
- *  pointer.
- */
-
-static Oid funcGetOid( PLpgSQL_function * func )
-{
-	return( func->fn_oid );
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3008,11 +2974,11 @@ BreakpointLookup(eBreakpointScope scope, BreakpointKey *key)
  * BreakpointOnId()
  *
  * This is where we see the real advantage of the existence of BreakCounts.
- * It returns true if there is a global breakpoint on the given id, false otherwise.
- * The hash key of Global breakpoints table is a composition of Oid and lineno. Therefore
- * lookups on the basis of Oid only are not possible. With this function however callers
- * can determine whether a breakpoint is marked on the given entity id with the cost of one
- * lookup only.
+ * It returns true if there is a global breakpoint on the given id, false
+ * otherwise. The hash key of Global breakpoints table is a composition of Oid
+ * and lineno. Therefore lookups on the basis of Oid only are not possible.
+ * With this function however callers can determine whether a breakpoint is
+ * marked on the given entity id with the cost of one lookup only.
  *
  * The check is made by looking up id in BreakCounts.
  */
@@ -3024,7 +2990,7 @@ BreakpointOnId(eBreakpointScope scope, Oid funcOid)
 
 	key.databaseId = MyProc->databaseId;
 	key.functionId = funcOid;
-	
+
 	acquireLock(scope, LW_SHARED);
 	breakCountLookup(scope, &key, &found);
 	releaseLock(scope);
@@ -3060,7 +3026,7 @@ BreakpointInsert(eBreakpointScope scope, BreakpointKey *key, BreakpointData *dat
 	
 	/* register this insert in the count hash table*/
 	breakCountInsert(scope, ((BreakCountKey *)key));
-	
+
 	releaseLock(scope);
 
 	return( TRUE );
@@ -3328,12 +3294,12 @@ void BreakpointCleanupProc(int pid)
 	releaseLock(BP_GLOBAL);
 }
 
-/* ================================================================================================================ *
- * 									Function definitions for BreakCounts hash table									*
- *																													*
- * Note: All the underneath functions assume that the caller has taken care of all concurrency issues and thus		*
- * does not do any locking																							*
- * ================================================================================================================ *
+/* ==========================================================================
+ * Function definitions for BreakCounts hash table
+ *
+ * Note: All the underneath functions assume that the caller has taken care
+ * of all concurrency issues and thus does not do any locking
+ * ==========================================================================
  */
 
 static void
