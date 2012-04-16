@@ -31,10 +31,18 @@ PLUGINS    = plugin_debugger
 DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
 DOCS	   = README.pldebugger
 
+# PGXS build needs PostgreSQL 9.2 or later. Earlier versions didn't install
+# plpgsql.h, so you needed the full source tree to access it.
+ifdef USE_PGXS
+PG_CONFIG = pg_config
+PGXS := $(shell $(PG_CONFIG) --pgxs)
+include $(PGXS)
+else
 subdir       = contrib/pldebugger
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
+endif
 
 ifeq ($(PORTNAME), win32)
 SHLIB_LINK += -lwsock32
