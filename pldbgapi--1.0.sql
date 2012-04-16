@@ -16,7 +16,10 @@ CREATE TYPE frame      AS ( level INT, targetname TEXT, func OID, linenumber INT
 CREATE TYPE var		   AS ( name TEXT, varClass char, lineNumber INTEGER, isUnique bool, isConst bool, isNotNull bool, dtype OID, value TEXT );
 CREATE TYPE proxyInfo  AS ( serverVersionStr TEXT, serverVersionNum INT, proxyAPIVer INT, serverProcessID INT );
 
-CREATE FUNCTION plpgsql_oid_debug( functionOID OID ) RETURNS INTEGER AS '$libdir/plugins/plugin_debugger' LANGUAGE C STRICT;
+CREATE FUNCTION pldbg_oid_debug( functionOID OID ) RETURNS INTEGER AS '$libdir/plugins/plugin_debugger' LANGUAGE C STRICT;
+
+-- for backwards-compatibility
+CREATE FUNCTION plpgsql_oid_debug( functionOID OID ) RETURNS INTEGER AS $$ SELECT pldbg_oid_debug($1) $$ LANGUAGE sql STRICT;
 
 CREATE FUNCTION pldbg_abort_target( session INTEGER ) RETURNS SETOF boolean AS  '$libdir/pldbgapi' LANGUAGE C STRICT;
 CREATE FUNCTION pldbg_attach_to_port( portNumber INTEGER ) RETURNS INTEGER AS '$libdir/pldbgapi' LANGUAGE C STRICT;
