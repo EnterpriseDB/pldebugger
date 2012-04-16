@@ -143,11 +143,11 @@ Datum pldbg_get_target_info( PG_FUNCTION_ARGS )
 
 	/* We only support 'o' as target type, meaning look up by oid */
 	targetType = PG_GETARG_CHAR( 1 );
-	if (targetType != 'c')
+	if (targetType != 'o')
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid target type"),
-				 errhint("Only valid target type is 'c'")));
+				 errhint("Only valid target type is 'o'")));
 
 	/*
 	 * Let getTargetFromOid() fill in the information in the struct.
