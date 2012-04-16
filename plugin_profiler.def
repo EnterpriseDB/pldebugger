@@ -1,5 +1,0 @@
-EXPORTS
-  load_plugin
-  _PG_init
-  Pg_magic_func
-

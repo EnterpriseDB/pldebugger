@@ -8,9 +8,6 @@
 ##	  pldbgapi.so		     - a set of functions that form an SQL interface to
 ##							   the PL/pgSQL debugger
 ##
-##	  plugin_profiler.so	 - a PL/pgSQL plugin that profiles the execution
-##							   of all PL/pgSQL code executed by a backend
-##
 ##  Note that this Makefile will build shared-objects with the correct suffix
 ##  (.so, .dll, or .sl) depending on the platform that you are compiling on,
 ##
@@ -30,9 +27,9 @@
 
 EXTENSION  = pldbgapi
 MODULES    = pldbgapi targetinfo
-PLUGINS    = plugin_debugger plugin_profiler
+PLUGINS    = plugin_debugger
 DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
-DOCS	   = README.pldebugger README.plprofiler
+DOCS	   = README.pldebugger
 
 subdir       = contrib/debugger
 top_builddir = ../..
@@ -121,11 +118,3 @@ ifeq ($(PORTNAME), darwin)
 pldbgapi$(DLSUFFIX):   CFLAGS += -undefined dynamic_lookup
 
 endif
-
-
-################################################################################
-## Rules for making the profiler plugins
-##
-##
-
-plugin_profiler$(DLSUFFIX):     CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -I$(top_builddir)/src/pl/plpgsql/src

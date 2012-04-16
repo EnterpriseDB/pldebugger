@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
 
-    <Target Name="all" DependsOnTargets="targetinfo;plugin_debugger;plugin_profiler;pldbgapi" />
+    <Target Name="all" DependsOnTargets="targetinfo;plugin_debugger;pldbgapi" />
 
     <Import Project="settings.projinc" />
 
@@ -80,19 +80,6 @@
         <Exec Command="cl $(CFLAGS) @flist /link /def:plugin_debugger.def $(LDFLAGS)" />
     </Target>
     
-    <!-- PLUGIN_PROFILER -->
-    
-    <ItemGroup>
-        <PluginProfilerSrc Include="plugin_profiler.c" />
-    </ItemGroup>
-
-    <Target Name="plugin_profiler" Inputs="@(PluginProfilerSrc)" Outputs="plugin_profiler.dll">
-        <Message Text="Building plugin_profiler.dll" />
-        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
-        <WriteLinesToFile File="flist" Lines="@(PluginProfilerSrc)" Overwrite="false" />
-        <Exec Command="cl $(CFLAGS) @flist /link /def:plugin_profiler.def $(LDFLAGS)" />
-    </Target>
-
     <!-- PLDBGAPI -->
 
     <ItemGroup>
@@ -108,10 +95,10 @@
     
     
     <Target Name="clean">
-        <Delete Files="targetinfo.dll;plugin_debugger.dll;plugin_profiler.dll;pldbgapi.dll" />
-        <Delete Files="targetinfo.exp;plugin_debugger.exp;plugin_profiler.exp;pldbgapi.exp" />
-        <Delete Files="targetinfo.lib;plugin_debugger.lib;plugin_profiler.lib;pldbgapi.lib" />
-        <Delete Files="targetinfo.dll.manifest;plugin_debugger.dll.manifest;plugin_profiler.dll.manifest;pldbgapi.dll.manifest" />
+        <Delete Files="targetinfo.dll;plugin_debugger.dll;pldbgapi.dll" />
+        <Delete Files="targetinfo.exp;plugin_debugger.exp;pldbgapi.exp" />
+        <Delete Files="targetinfo.lib;plugin_debugger.lib;pldbgapi.lib" />
+        <Delete Files="targetinfo.dll.manifest;plugin_debugger.dll.manifest;pldbgapi.dll.manifest" />
         <Delete Files="flist" />
     </Target>
 
