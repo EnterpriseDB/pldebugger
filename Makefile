@@ -31,7 +31,7 @@ PLUGINS    = plugin_debugger
 DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
 DOCS	   = README.pldebugger
 
-subdir       = contrib/debugger
+subdir       = contrib/pldebugger
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
