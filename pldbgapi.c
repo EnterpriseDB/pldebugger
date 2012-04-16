@@ -176,9 +176,10 @@ PG_FUNCTION_INFO_V1( pldbg_disable_breakpoint );	/* Disable (but don't delete) a
 
 typedef struct
 {
-	int		serverSocket;		/* Socket connected to the debugger server		*/
-	int		serverPort;			/* Port number where debugger server is listening	*/
-	int		listener;			/* Socket where we wait for global breakpoints		*/
+	int			serverSocket;	/* Socket connected to the debugger server */
+	int			serverPort;		/* Port number where debugger server is listening */
+	int			listener;		/* Socket where we wait for global breakpoints */
+	char	   *breakpointString;
 } debugSession;
 
 /*******************************************************************************
@@ -364,6 +365,14 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	if( targetProtoVersion )
 		pfree( targetProtoVersion );
+
+
+	/*
+	 * After the handshake, the target process will send us information about
+	 * the local breakpoint that it hit. Read it. We will hand it to the client
+	 * if it calls wait_for_breakpoint().
+	 */
+	session->breakpointString = MemoryContextStrdup(TopMemoryContext, getNString( session ));
 
 	/*
 	 * For convenience, remember the most recent session - if you call
@@ -583,8 +592,15 @@ static Datum buildBreakpointDatum( char * breakpointString )
 Datum pldbg_wait_for_breakpoint( PG_FUNCTION_ARGS )
 {
 	debugSession * session           = defaultSession( PG_GETARG_SESSION( 0 ));
-	char         * breakpointString  = getNString( session );
-	
+	char         * breakpointString;
+
+	if (!session->breakpointString)
+		PG_RETURN_NULL();
+
+	breakpointString = pstrdup(session->breakpointString);
+	pfree(session->breakpointString);
+	session->breakpointString = NULL;
+
 	PG_RETURN_DATUM( buildBreakpointDatum( breakpointString ));
 }
 
@@ -1549,6 +1565,9 @@ static void closeSession( debugSession * session )
 	{
 		BreakpointCleanupProc( MyProcPid );
 	}
+
+	if( session->breakpointString )
+		pfree( session->breakpointString );
 
 	pfree( session );
 
