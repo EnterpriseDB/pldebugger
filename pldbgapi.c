@@ -7,8 +7,7 @@
  *
  *	To debug a function or procedure, you need two backend processes
  *	plus a debugger client (the client could be a command-line client
- *	such as psql but is more likely a graphical client such as the 
- *	edb-debugger).
+ *	such as psql but is more likely a graphical client such as pgAdmin).
  *
  *	The first backend is called the target - it's the process that's
  *	running the code that you want to debug.
@@ -328,19 +327,20 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 		ereport( ERROR, (errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "could not connect to debug target" )));
 
 	/*
-	 * To convince the debugger server that we are a valid proxy (as opposed to some 
-	 * nefarious hacker that just happens to wander across the server's open port) 
-	 * we send some information that only a valid proxy is likely to know.
+	 * To convince the debugger server that we are a valid proxy (as opposed
+	 * to some nefarious hacker that just happens to wander across the server's
+	 * open port) we send some information that only a valid proxy is likely
+	 * to know.
 	 *
-	 * NOTE: this is not foolproof - it's still possible to fool the debugger server,
-	 *       but you have to be located behind the firewall in order to do that, you 
-	 *		 have to know what the debugger server is expecting, and you have to know 
-	 *		 the offset of your own PGPROC entry.  If you have all of that information,
-	 *		 you can do anything you want anyway.
+	 * NOTE: this is not foolproof - it's still possible to fool the debugger
+	 * server, but you have to be located behind the firewall in order to do
+	 * that, you have to know what the debugger server is expecting, and you
+	 * have to know the offset of your own PGPROC entry.  If you have all of
+	 * that information, you can do anything you want anyway.
 	 *
-	 * We send our own process ID and the offset of our PGPROC array entry.  The 
-	 * debugger server can use that offset to verify that our process ID is correct
-	 * and can also verify that we are in fact a superuser
+	 * We send our own process ID and the offset of our PGPROC array entry.
+	 * The debugger server can use that offset to verify that our process ID
+	 * is correct and can also verify that we are in fact a superuser
 	 */
 
 	sendUInt32( session, MyProc->pid );
@@ -982,8 +982,7 @@ Datum pldbg_get_proxy_info( PG_FUNCTION_ARGS )
  * pldbg_set_breakpoint(sessionID INT, package OID, function OID, lineNumber INT)
  *	RETURNS boolean
  *
- *	This function is equivalent to the CREATE BREAKPOINT command and will most 
- *	likely become obsolete as soon as the CREATE BREAKPOINT is complete.
+ * Sets a *local* breakpoint in the target process.
  */
 
 Datum pldbg_set_breakpoint( PG_FUNCTION_ARGS )
@@ -1003,9 +1002,6 @@ Datum pldbg_set_breakpoint( PG_FUNCTION_ARGS )
 /*******************************************************************************
  * pldbg_drop_breakpoint(sessionID INT, package OID, function OID, lineNumber INT)
  *	RETURNS boolean
- *
- *	This function is equivalent to the DROP BREAKPOINT command and will most 
- *	likely become obsolete as soon as the DROP BREAKPOINT is complete.
  */
 
 Datum pldbg_drop_breakpoint( PG_FUNCTION_ARGS )
