@@ -27,7 +27,14 @@
 
 EXTENSION  = pldbgapi
 MODULES = pldbgapi
-PLUGINS    = plugin_debugger
+PLUGIN_big = plugin_debugger
+
+# OBJS lists the .o files comprising plugin_debugger.so. pldbgapi.so is
+# implicitly built from pldbgapi.c file.
+OBJS	   = plpgsql_debugger.o plugin_debugger.o
+ifdef INCLUDE_PACKAGE_SUPPORT
+OBJS += spl_debugger.o
+endif
 DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
 DOCS	   = README.pldebugger
 
@@ -44,6 +51,16 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
+ifdef PLUGIN_big
+# shared library parameters
+NAME = $(PLUGIN_big)
+
+include $(top_srcdir)/src/Makefile.shlib
+
+all: all-lib
+endif # PLUGIN_big
+
+
 ifeq ($(PORTNAME), win32)
 SHLIB_LINK += -lwsock32
 SYMLINKCMD  = cp
@@ -59,7 +76,7 @@ endif
 
 SHLIB_LINK      += $(BE_DLLLIBS)
 
-all:	$(addsuffix $(DLSUFFIX), $(PLUGINS))
+all:	$(addsuffix $(DLSUFFIX), $(PLUGIN_big))
 
 install: all installdirs installdir-plugins install-plugins
 
@@ -67,14 +84,14 @@ clean: clean-plugins
 
 uninstall: uninstall-plugins
 
-install-plugins: installdir-plugins $(addsuffix $(DLSUFFIX), $(PLUGINS))
-	$(INSTALL_SHLIB) $(addsuffix $(DLSUFFIX), $(PLUGINS)) '$(DESTDIR)$(pkglibdir)/plugins/'
+install-plugins: installdir-plugins $(addsuffix $(DLSUFFIX), $(PLUGIN_big))
+	$(INSTALL_SHLIB) $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) '$(DESTDIR)$(pkglibdir)/plugins/'
 
 clean-plugins:
-	rm -f $(addsuffix $(DLSUFFIX), $(PLUGINS)) $(addsuffix .o, $(PLUGINS))
+	rm -f $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) $(PLUGIN_OBJS)
 
 uninstall-plugins:
-	rm -f $(addprefix '$(DESTDIR)$(pkglibdir)'/plugins/, $(addsuffix $(DLSUFFIX), $(PLUGINS)))
+	rm -f $(addprefix '$(DESTDIR)$(pkglibdir)'/plugins/, $(addsuffix $(DLSUFFIX), $(PLUGIN_big)))
 
 # MKDIR_P replaced mkinstalldirs in PG8.5+
 installdir-plugins:
@@ -84,9 +101,9 @@ installdir-plugins:
 ## Rules for making the debugger plugin.
 ##
 ## 
+plugin_debugger$(DLSUFFIX): $(PLUGIN_OBJS)
 
-plugin_debugger$(DLSUFFIX): 	CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
-
+plpgsql_debugger.o: CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
 
 ################################################################################
 ## If we're building against EnterpriseDB's Advanced Server, also build a
@@ -98,10 +115,10 @@ plugin_debugger$(DLSUFFIX): 	CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
 ## To enable this, you need to run make as "make INCLUDE_PACKAGE_SUPPORT=1"
 ## 
 ifdef INCLUDE_PACKAGE_SUPPORT
-plugin_spl_debugger.c:  plugin_debugger.c
-	$(SYMLINKCMD) $(module_srcdir)plugin_debugger.c plugin_spl_debugger.c
+spl_debugger.c:  plpgsql_debugger.c
+	$(SYMLINKCMD) $(module_srcdir)plpgsql_debugger.c spl_debugger.c
 
-plugin_spl_debugger$(DLSUFFIX): 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1 -I$(top_builddir)/src/pl/edb-spl/src
+spl_debugger.o: 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1 -I$(top_builddir)/src/pl/edb-spl/src
 endif
 
 ################################################################################
