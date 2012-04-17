@@ -26,8 +26,7 @@
 	#include <arpa/inet.h>
 #endif
 
-#include "nodes/pg_list.h"
-#include "lib/dllist.h"
+#include "access/xact.h"
 #include "lib/stringinfo.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
@@ -96,12 +95,19 @@ per_session_ctx_t per_session_ctx;
 
 errorHandlerCtx client_lost;
 
+static debugger_language_t *debugger_languages[] = {
+	&plpgsql_debugger_lang,
+#ifdef INCLUDE_PACKAGE_SUPPORT
+	&spl_debugger_lang,
+#endif
+	NULL
+};
+
 /**********************************************************************
  * Function declarations
  **********************************************************************/
 
 void _PG_init( void );				/* initialize this module when we are dynamically loaded	*/
-void _PG_fini( void );				/* shutdown this module when we are dynamically unloaded	*/
 
 /**********************************************************************
  * Local (hidden) function prototypes
@@ -119,6 +125,14 @@ static bool 		 handle_socket_error(void);
 static bool 		 parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpointString );
 static bool 		 addLocalBreakpoint( Oid funcOID, int lineNo );
 static void			 reserveBreakpoints( void );
+static debugger_language_t *language_of_frame(ErrorContextCallback *frame);
+
+static void do_deposit(ErrorContextCallback *frame, debugger_language_t *lang,
+					   char *command);
+static void send_breakpoints(Oid funcOid);
+static void send_stack(void);
+static void select_frame(int frameNo, ErrorContextCallback **frame_p, debugger_language_t **lang_p);
+
 
 /**********************************************************************
  * Function definitions
@@ -126,7 +140,11 @@ static void			 reserveBreakpoints( void );
 
 void _PG_init( void )
 {
-	plpgsql_debugger_init();
+	int i;
+
+	/* Initialize all the per-language hooks. */
+	for (i = 0; debugger_languages[i] != NULL; i++)
+		debugger_languages[i]->initialize();
 
 	reserveBreakpoints();
 }
@@ -446,6 +464,48 @@ void dbg_send( const char *fmt, ... )
 	}
 
 	pfree(result.data);
+}
+
+
+/*
+ * ---------------------------------------------------------------------
+ * dbg_send_src()
+ *
+ *	dbg_send_src() sends the source code for a function to the client.
+ *
+ *  The client caches the source code that we send it and uses xmin/cmin
+ *  to ensure the validity of the cache.
+ */
+
+static void dbg_send_src( char * command  )
+{
+    HeapTuple			tup;
+    char				*procSrc;
+	Oid					targetOid = InvalidOid;  /* Initialize to keep compiler happy */
+	TransactionId		xmin;
+	CommandId			cmin;
+
+	targetOid = atoi( command + 2 );
+
+	/* Find the source code for this function */
+	procSrc = findSource( targetOid, &tup );
+										
+	xmin = HeapTupleHeaderGetXmin( tup->t_data );
+
+	if( TransactionIdIsCurrentTransactionId( xmin ))
+		cmin = HeapTupleHeaderGetCmin( tup->t_data );
+	else
+		cmin = 0;
+
+	/* FIXME: We need to send the xmin and cmin to the client too so he can know when to flush his cache */
+
+	/* Found it - now send the source to the client */
+
+	dbg_send( "%s", procSrc );
+
+	/* Release the process tuple and send a footer to the client so he knows we're finished */
+
+    ReleaseSysCache( tup );
 }
 
 /*
@@ -1111,6 +1171,350 @@ static bool handle_socket_error(void)
 #endif
 		
 	return abort;
+}
+
+/*
+ * Returns true if we continue stepping in this frame. False otherwise.
+ */
+bool
+plugin_debugger_main_loop(void)
+{
+	ErrorContextCallback *frame;
+	debugger_language_t *lang; /* language of the selected frame */
+	bool	need_more     = TRUE;
+	char   *command;
+	bool	retval = TRUE;
+
+	/* Initially, set focus on the topmost frame in the stack */
+
+	for( frame = error_context_stack; frame; frame = frame->previous )
+	{
+		/*
+		 * ignore unrecognized stack frames.
+		 */
+		lang = language_of_frame(frame);
+		if (lang)
+			break;
+	}
+	if (frame == NULL)
+	{
+		/*
+		 * Oops, couldn't find a frame that we recognize in the stack. This
+		 * shouldn't happen since we're stopped at a breakpoint.
+		 */
+		elog(WARNING, "could not find PL/pgSQL frame at the top of the stack");
+		return false;
+	}
+
+	/* Report the current location */
+	lang->send_cur_line(frame);
+
+	/* 
+	 * Loop through the following chunk of code until we get a command
+	 * from the user that would let us execute this PL/pgSQL statement.
+	 */
+	while( need_more )
+	{
+		/* Wait for a command from the debugger client */
+		command = dbg_read_str();
+
+		/*
+		 * The debugger client sent us a null-terminated command string
+		 *
+		 * Each command starts with a single character and is
+		 * followed by set of optional arguments.
+		 */
+		switch( command[0] )
+		{
+			case PLDBG_CONTINUE:
+			{
+				/*
+				 * Continue (stop single-stepping and just run to the next breakpoint)
+				 */
+				retval = false;
+				need_more = FALSE;
+				break;
+			}
+
+			case PLDBG_SET_BREAKPOINT:
+			{
+				setBreakpoint( command );
+				break;
+			}
+				
+			case PLDBG_CLEAR_BREAKPOINT:
+			{
+				clearBreakpoint( command );
+				break;
+			}
+
+			case PLDBG_PRINT_VAR:
+			{
+				/*
+				 * Print value of given variable 
+				 */
+
+				lang->print_var( frame, &command[2], -1 );
+				break;
+			}
+
+			case PLDBG_LIST_BREAKPOINTS:
+			{
+				send_breakpoints( lang->get_func_oid(frame) );
+				break;
+			}
+
+			case PLDBG_STEP_INTO:
+			{
+				/* 
+				 * Single-step/step-into
+				 */
+				per_session_ctx.step_into_next_func = TRUE;
+				need_more = FALSE;
+				break;
+			}
+
+			case PLDBG_STEP_OVER:
+			{
+				/*
+				 * Single-step/step-over
+				 */
+				need_more = FALSE;
+				break;
+			}
+
+			case PLDBG_LIST:
+			{
+				/*
+				 * Send source code for given function
+				 */
+				dbg_send_src( command );
+				break;
+			}
+
+			case PLDBG_PRINT_STACK:
+			{
+				send_stack();
+				break;
+			}
+
+			case PLDBG_SELECT_FRAME:
+			{
+				select_frame(atoi( &command[2] ), &frame, &lang);
+				/* Report the new location */
+				lang->send_cur_line( frame );
+				break;
+				
+			}
+
+			case PLDBG_DEPOSIT:
+			{
+				/* 
+				 * Deposit a new value into the given variable
+				 */
+				do_deposit(frame, lang, command);
+				break;
+			}
+
+			case PLDBG_INFO_VARS:
+			{
+				/*
+				 * Send list of variables (and their values)
+				 */
+				lang->send_vars( frame );
+				break;
+			}
+					
+			case PLDBG_RESTART:
+			case PLDBG_STOP:
+			{
+				/* stop the debugging session */
+				dbg_send( "%s", "t" );
+
+				ereport(ERROR,
+						(errcode(ERRCODE_QUERY_CANCELED),
+						 errmsg("canceling statement due to user request")));
+				break;
+			}
+
+			default:
+				elog(WARNING, "unrecognized message %c", command[0]);
+		}
+		pfree(command);
+	}
+
+	return retval;
+}
+
+static void
+do_deposit(ErrorContextCallback *frame, debugger_language_t *lang,
+		   char *command)
+{
+	char    	  *var_name;
+	char      	  *value;
+	char      	  *lineno_s;
+	int			   lineno;
+
+	/* command = d:var.line=expr */
+
+	var_name = command + 2;
+    value  = strchr( var_name, '=' ); /* FIXME: handle quoted identifiers here */
+	if (!value)
+	{
+		dbg_send( "%s", "f" );
+		return;
+	}
+	*value = '\0';
+	value++;
+
+    lineno_s = strchr( var_name, '.' ); /* FIXME: handle quoted identifiers here */
+	if (!lineno_s)
+	{
+		dbg_send( "%s", "f" );
+		return;
+	}
+	*lineno_s = '\0';
+	lineno_s++;
+	if (strlen(lineno_s) == 0)
+		lineno = -1;
+	else
+		lineno = atoi(lineno_s);
+
+	if (lang->do_deposit(frame, var_name, lineno, value))
+		dbg_send( "%s", "t" );
+	else
+		dbg_send( "%s", "f" );
+}
+
+
+/*
+ * ---------------------------------------------------------------------
+ * sendBreakpoints()
+ *
+ *	This function sends a list of breakpoints to the proxy process.
+ *
+ *	We only send the breakpoints defined in the given frame.
+ *	
+ *	For now, we maintain our own private list of breakpoints -
+ *	later, we'll use the same list managed by the CREATE/
+ *	DROP BREAKPOINT commands.
+ */
+static void
+send_breakpoints(Oid funcOid)
+{
+	Breakpoint      * breakpoint;
+	HASH_SEQ_STATUS	  scan;
+
+	BreakpointGetList( BP_GLOBAL, &scan );
+
+	while(( breakpoint = (Breakpoint *) hash_seq_search( &scan )) != NULL )
+	{
+		if(( breakpoint->key.targetPid == -1 ) || ( breakpoint->key.targetPid == MyProc->pid ))
+			if( breakpoint->key.databaseId == MyProc->databaseId )
+				if( breakpoint->key.functionId == funcOid )
+					dbg_send( "%d:%d:%s", funcOid, breakpoint->key.lineNumber, "" );
+	}
+
+	BreakpointReleaseList( BP_GLOBAL );
+
+	BreakpointGetList( BP_LOCAL, &scan );
+
+	while(( breakpoint = (Breakpoint *) hash_seq_search( &scan )) != NULL )
+	{
+		if(( breakpoint->key.targetPid == -1 ) || ( breakpoint->key.targetPid == MyProc->pid ))
+			if( breakpoint->key.databaseId == MyProc->databaseId )
+				if( breakpoint->key.functionId == funcOid )
+					dbg_send( "%d:%d:%s", funcOid, breakpoint->key.lineNumber, "" );
+	}
+
+	BreakpointReleaseList( BP_LOCAL );
+
+	dbg_send( "%s", "" );	/* empty string indicates end of list */
+}
+
+
+/*
+ * ---------------------------------------------------------------------
+ * select_frame()
+ *
+ *	This function changes the debugger focus to the indicated frame (in the call
+ *	stack). Whenever the target stops (at a breakpoint or as the result of a 
+ *	step/into or step/over), the debugger changes focus to most deeply nested 
+ *  function in the call stack (because that's the function that's executing).
+ *
+ *	You can change the debugger focus to other stack frames - once you do that,
+ *	you can examine the source code for that frame, the variable values in that
+ *	frame, and the breakpoints in that target. 
+ *
+ *	The debugger focus remains on the selected frame until you change it or 
+ *	the target stops at another breakpoint.
+ */
+static void
+select_frame(int frameNo, ErrorContextCallback **frame_p, debugger_language_t **lang_p)
+{
+	ErrorContextCallback *frame;
+
+	for( frame = error_context_stack; frame; frame = frame->previous )
+	{
+		debugger_language_t *lang = language_of_frame(frame);
+		if (!lang)
+			continue;
+
+		if( frameNo-- == 0 )
+		{
+			lang->select_frame(frame);
+
+			*frame_p = frame;
+			*lang_p = lang;
+		}
+	}
+
+	/* Not found. Keep frame unchanged */
+}
+
+/*
+ * Returns the debugger_language_t struct representing the language that
+ * this stack frame belongs to. Or NULL if we don't have a handler for it.
+ */
+static debugger_language_t *
+language_of_frame(ErrorContextCallback *frame)
+{
+	debugger_language_t *lang;
+	int			i;
+
+	for (i = 0; debugger_languages[i] != NULL; i++)
+	{
+		lang = debugger_languages[i];
+		if (lang->frame_belongs_to_me(frame))
+			return lang;
+	}
+	return NULL;
+}
+
+/* ------------------------------------------------------------------
+ * send_stack()
+ * 
+ *   This function sends the call stack to the debugger client.  For
+ *	 each PL/pgSQL stack frame that we find, we send the function name,
+ *	 argument names and values, and the current line number (within 
+ *	 that particular invocation).
+ */
+static void
+send_stack( void )
+{
+	ErrorContextCallback * entry;
+
+	for( entry = error_context_stack; entry; entry = entry->previous )
+	{
+		/*
+		 * ignore frames we don't recognize
+		 */
+		debugger_language_t *lang = language_of_frame(entry);
+		if (lang != NULL)
+			lang->send_stack_frame(entry);
+	}
+
+	dbg_send( "%s", "" );	/* empty string indicates end of list */
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -18,22 +18,10 @@
 #include <setjmp.h>
 #include <signal.h>
 
-#ifdef WIN32
-	#include<winsock2.h>
-#else
-	#include <netinet/in.h>
-	#include <sys/socket.h>
-	#include <arpa/inet.h>
-#endif
-
 #include "lib/stringinfo.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "parser/parser.h"
-#include "parser/parse_func.h"
 #include "globalbp.h"
-#include "storage/proc.h"							/* For MyProc		   */
-#include "storage/procarray.h"						/* For BackendPidGetProc */
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
@@ -90,14 +78,12 @@ static void 		 initialize_plugin_info( PLpgSQL_execstate * estate, PLpgSQL_funct
 
 static char       ** fetchArgNames( PLpgSQL_function * func, int * nameCount );
 static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const char * var_name, int lineno, int * index );
-static void 	     dbg_printvar( PLpgSQL_execstate * estate, const char * var_name, int lineno );
 
 static bool 		 is_datum_visible( PLpgSQL_datum * datum );
 static bool			 is_var_visible( PLpgSQL_execstate * frame, int var_no );
 static bool			 datumIsNull(PLpgSQL_datum *datum);
 static bool          varIsArgument( const PLpgSQL_execstate * frame, int varNo );
-
-static PLpgSQL_plugin plugin_funcs = { dbg_startup, NULL, NULL, dbg_newstmt, NULL };
+static char		   * get_text_val( PLpgSQL_var * var, char ** name, char ** type );
 
 #if INCLUDE_PACKAGE_SUPPORT
 static const char * plugin_name  = "spl_plugin";
@@ -105,60 +91,277 @@ static const char * plugin_name  = "spl_plugin";
 static const char * plugin_name  = "PLpgSQL_plugin";
 #endif
 
+static PLpgSQL_plugin plugin_funcs = { dbg_startup, NULL, NULL, dbg_newstmt, NULL };
+
+/*
+ * pldebugger_language_t interface.
+ */
+static void plpgsql_debugger_init(void);
+static bool plpgsql_frame_belongs_to_me(ErrorContextCallback *frame);
+static void plpgsql_send_stack_frame(ErrorContextCallback *frame);
+static void plpgsql_send_vars(ErrorContextCallback *frame);
+static void plpgsql_select_frame(ErrorContextCallback *frame);
+static void plpgsql_print_var(ErrorContextCallback *frame, const char *var_name, int lineno);
+static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name, int line_number, const char *value);
+static Oid plpgsql_get_func_oid(ErrorContextCallback *frame);
+static void plpgsql_send_cur_line(ErrorContextCallback *frame);
+
+#if INCLUDE_PACKAGE_SUPPORT
+debugger_language_t spl_debugger_lang =
+#else
+debugger_language_t plpgsql_debugger_lang =
+#endif
+{
+	plpgsql_debugger_init,
+	plpgsql_frame_belongs_to_me,
+	plpgsql_send_stack_frame,
+	plpgsql_send_vars,
+	plpgsql_select_frame,
+	plpgsql_print_var,
+	plpgsql_do_deposit,
+	plpgsql_get_func_oid,
+	plpgsql_send_cur_line
+};
+
 /* Install this module as an PL/pgSQL instrumentation plugin */
-void plpgsql_debugger_init( void )
+static void
+plpgsql_debugger_init(void)
 {
 	PLpgSQL_plugin ** var_ptr = (PLpgSQL_plugin **) find_rendezvous_variable( plugin_name );
 
 	*var_ptr = &plugin_funcs;
 }
 
-void plpgsql_debugger_fini( void )
-{
-	PLpgSQL_plugin ** var_ptr = (PLpgSQL_plugin **) find_rendezvous_variable( plugin_name );
 
-	*var_ptr = &plugin_funcs;
+/**********************************************************************
+ * Functions implemeting the pldebugger_language_t interface
+ **********************************************************************/
+
+static bool
+plpgsql_frame_belongs_to_me(ErrorContextCallback *frame)
+{
+	return (frame->callback == plugin_funcs.error_callback);
 }
 
 /*
- * ---------------------------------------------------------------------
- * dbg_send_src()
- *
- *	dbg_send_src() sends the source code for a function to the client.
- *
- *  The client caches the source code that we send it and uses xmin/cmin
- *  to ensure the validity of the cache.
+ * plpgsql_send_stack_frame()
+ * 
+ * This function sends information about a single stack frame to the debugger
+ * client.  This function is called by send_stack() whenever send_stack()
+ * finds a PL/pgSQL call in the stack (remember, the call stack may contain
+ * stack frames for functions written in other languages like PL/Tcl).
  */
-
-static void dbg_send_src( char * command  )
+static void
+plpgsql_send_stack_frame(ErrorContextCallback *frame)
 {
-    HeapTuple			tup;
-    char				*procSrc;
-	Oid					targetOid = InvalidOid;  /* Initialize to keep compiler happy */
-	TransactionId		xmin;
-	CommandId			cmin;
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
+#if (PG_VERSION_NUM >= 80500)
+	PLpgSQL_function  * func     = estate->func;
+#else
+	PLpgSQL_function  * func     = estate->err_func;
+#endif
+	PLpgSQL_stmt	  * stmt 	 = estate->err_stmt;
+	int					argNameCount;
+	char             ** argNames = fetchArgNames( func, &argNameCount );
+	StringInfo		    result   = makeStringInfo();
+	char              * delimiter = "";
+	int				    arg;
 
-	targetOid = atoi( command + 2 );
+	/*
+	 * Send the name, function OID, and line number for this frame
+	 */
 
-	/* Find the source code for this function */
-	procSrc = findSource( targetOid, &tup );
-										
-	xmin = HeapTupleHeaderGetXmin( tup->t_data );
+	appendStringInfo( result, "%s:%d:%d:",
+#if (PG_VERSION_NUM >= 90200)
+					  func->fn_signature,
+#else
+					  func->fn_name,
+#endif
+					  func->fn_oid,
+					  stmt->lineno );
 
-	if( TransactionIdIsCurrentTransactionId( xmin ))
-		cmin = HeapTupleHeaderGetCmin( tup->t_data );
-	else
-		cmin = 0;
+	/*
+	 * Now assemble a string that shows the argument names and value for this frame
+	 */
 
-	/* FIXME: We need to send the xmin and cmin to the client too so he can know when to flush his cache */
+	for( arg = 0; arg < func->fn_nargs; ++arg )
+	{
+		int					index   = func->fn_argvarnos[arg];
+		PLpgSQL_datum		*argDatum = (PLpgSQL_datum *)estate->datums[index];
+		char 				*value;
 
-	/* Found it - now send the source to the client */
+		/* value should be an empty string if argDatum is null*/
+		if( datumIsNull( argDatum ))
+			value = pstrdup( "" );
+		else
+			value = get_text_val((PLpgSQL_var*)argDatum, NULL, NULL );
+		
+		if( argNames && argNames[arg] && argNames[arg][0] )
+			appendStringInfo( result,  "%s%s=%s", delimiter, argNames[arg], value );
+		else
+			appendStringInfo( result,  "%s$%d=%s", delimiter, arg+1, value );
 
-	dbg_send( "%s", procSrc );
+		pfree( value );
+			
+		delimiter = ", ";
+	}
 
-	/* Release the process tuple and send a footer to the client so he knows we're finished */
+	dbg_send( "%s", result->data );
+}
 
-    ReleaseSysCache( tup );
+
+/*
+ * plpgsql_send_vars()
+ *	
+ * This function sends a list of variables (names, types, values...) to
+ * the proxy process.  We send information about the variables defined in
+ * the given frame (local variables) and parameter values.
+ */
+static bool
+varIsArgument(const PLpgSQL_execstate *estate, int varNo)
+{
+	dbg_ctx * dbg_info = (dbg_ctx *) estate->plugin_info;
+
+	return (varNo < dbg_info->func->fn_nargs);
+}
+
+static void
+plpgsql_send_vars(ErrorContextCallback *frame)
+{
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
+	dbg_ctx * dbg_info = (dbg_ctx *) estate->plugin_info;
+	int       i;
+
+	for( i = 0; i < estate->ndatums; i++ )
+	{
+		if( is_var_visible( estate, i ))
+		{
+			switch( estate->datums[i]->dtype )
+			{
+				case PLPGSQL_DTYPE_VAR:
+				{
+					PLpgSQL_var * var = (PLpgSQL_var *) estate->datums[i];
+					char        * val;
+					char		* name = var->refname;
+					bool		  isArg = varIsArgument( estate, i );
+
+					if( datumIsNull((PLpgSQL_datum *)var ))
+						val = "NULL";
+					else
+						val = get_text_val( var, NULL, NULL );
+
+					if( i < dbg_info->argNameCount )
+					{
+						if( dbg_info->argNames && dbg_info->argNames[i] && dbg_info->argNames[i][0] )
+						{
+							name  = dbg_info->argNames[i];
+							isArg = TRUE;
+						}
+					}
+
+					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
+							  name, 
+							  isArg ? 'A' : 'L',
+							  var->lineno,  
+							  dbg_info->symbols[i].duplicate_name ? 'f' : 't',
+							  var->isconst ? 't':'f', 
+							  var->notnull ? 't':'f', 
+							  var->datatype ? var->datatype->typoid : InvalidOid,
+							  val );
+				  
+					break;
+				}
+#if 0
+			FIXME: implement other types
+
+				case PLPGSQL_DTYPE_REC:
+				{
+					PLpgSQL_rec * rec = (PLpgSQL_rec *) estate->datums[i];
+					int		      att;
+					char        * typeName;
+
+					if (rec->tupdesc != NULL)
+					{
+						for( att = 0; att < rec->tupdesc->natts; ++att )
+						{
+							typeName = SPI_gettype( rec->tupdesc, att + 1 );
+	
+							dbg_send( "o:%s.%s:%d:%d:%d:%d:%s\n",
+									  rec->refname, NameStr( rec->tupdesc->attrs[att]->attname ), 
+									  0, rec->lineno, 0, rec->tupdesc->attrs[att]->attnotnull, typeName ? typeName : "" );
+	
+							if( typeName )
+								pfree( typeName );
+						}
+					}
+					break;
+				}
+#endif
+			}
+		}
+	}
+
+#if INCLUDE_PACKAGE_SUPPORT
+	/* If this frame represents a package function/procedure, send the package variables too */
+	if( dbg_info->package != NULL )
+	{
+		PLpgSQL_package * package = dbg_info->package;
+		int				  varIndex;
+
+		for( varIndex = 0; varIndex < package->ndatums; ++varIndex )
+		{
+			PLpgSQL_datum * datum = package->datums[varIndex];
+
+			switch( datum->dtype )
+			{
+				case PLPGSQL_DTYPE_VAR:
+				{
+					PLpgSQL_var * var = (PLpgSQL_var *) datum;
+					char        * val;
+					char		* name = var->refname;
+
+					if( datumIsNull((PLpgSQL_datum *)var ))
+						val = "NULL";
+					else
+						val = get_text_val( var, NULL, NULL );
+
+					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
+							  name, 
+							  'P',				/* variable class - P means package var */
+							  var->lineno,  
+							  'f',				/* duplicate name?						*/
+							  var->isconst ? 't':'f', 
+							  var->notnull ? 't':'f', 
+							  var->datatype ? var->datatype->typoid : InvalidOid,
+							  val );
+				  
+					break;
+				}
+			}
+		}
+	}
+#endif
+
+	dbg_send( "%s", "" );	/* empty string indicates end of list */
+}
+
+static void
+plpgsql_select_frame(ErrorContextCallback *frame)
+{
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
+
+	/*
+	 * When a frame is selected, ensure that we've initialized its
+	 * plugin_info.
+	 */
+	if (estate->plugin_info == NULL)
+	{
+#if (PG_VERSION_NUM >= 80500)
+		initialize_plugin_info(estate, estate->func);
+#else
+		initialize_plugin_info(estate, estate->err_func);
+#endif
+	}
 }
 
 /*
@@ -384,9 +587,10 @@ static void print_recfield( const PLpgSQL_execstate * frame, const char * var_na
 
 }
 
-static void dbg_printvar( PLpgSQL_execstate * estate, const char * var_name, int lineno )
+static void
+plpgsql_print_var(ErrorContextCallback *frame, const char * var_name, int lineno)
 {
-
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
 	PLpgSQL_variable * generic = NULL;
 
 	/* Try to find the given variable */
@@ -552,7 +756,7 @@ static char ** fetchArgNames( PLpgSQL_function * func, int * nameCount )
 	tup = SearchSysCache( PROCOID, ObjectIdGetDatum( func->fn_oid ), 0, 0, 0 );
 
 	if( !HeapTupleIsValid( tup ))
-		elog( ERROR, "edbspl: cache lookup for proc %u failed", func->fn_oid );
+		elog( ERROR, "cache lookup for function %u failed", func->fn_oid );
 
 	argnamesDatum = SysCacheGetAttr( PROCOID, tup, Anum_pg_proc_proargnames, &isNull );
 
@@ -605,101 +809,6 @@ static char * get_text_val( PLpgSQL_var * var, char ** name, char ** type )
 	return( text_value );
 }
 
-/* ------------------------------------------------------------------
- * send_plpgsql_frame()
- * 
- *   This function sends information about a single stack frame
- *   to the debugger client.  This function is called by send_stack()
- *	 whenever send_stack() finds a PL/pgSQL call in the stack (remember,
- *	 the call stack may contain stack frames for functions written in 
- *	 other languages like PL/Tcl).
- */
-
-static void send_plpgsql_frame( PLpgSQL_execstate * estate )
-{
-
-#if (PG_VERSION_NUM >= 80500)
-	PLpgSQL_function  * func     = estate->func;
-#else
-	PLpgSQL_function  * func     = estate->err_func;
-#endif
-	PLpgSQL_stmt	  * stmt 	 = estate->err_stmt;
-	int					argNameCount;
-	char             ** argNames = fetchArgNames( func, &argNameCount );
-	StringInfo		    result   = makeStringInfo();
-	char              * delimiter = "";
-	int				    arg;
-
-	/*
-	 * Send the name, function OID, and line number for this frame
-	 */
-
-	appendStringInfo( result, "%s:%d:%d:",
-#if (PG_VERSION_NUM >= 90200)
-					  func->fn_signature,
-#else
-					  func->fn_name,
-#endif
-					  func->fn_oid,
-					  stmt->lineno );
-
-	/*
-	 * Now assemble a string that shows the argument names and value for this frame
-	 */
-
-	for( arg = 0; arg < func->fn_nargs; ++arg )
-	{
-		int					index   = func->fn_argvarnos[arg];
-		PLpgSQL_datum		*argDatum = (PLpgSQL_datum *)estate->datums[index];
-		char 				*value;
-
-		/* value should be an empty string if argDatum is null*/
-		if( datumIsNull( argDatum ))
-			value = pstrdup( "" );
-		else
-			value = get_text_val((PLpgSQL_var*)argDatum, NULL, NULL );
-		
-		if( argNames && argNames[arg] && argNames[arg][0] )
-			appendStringInfo( result,  "%s%s=%s", delimiter, argNames[arg], value );
-		else
-			appendStringInfo( result,  "%s$%d=%s", delimiter, arg+1, value );
-
-		pfree( value );
-			
-		delimiter = ", ";
-	}
-
-	dbg_send( "%s", result->data );
-}
-
-/* ------------------------------------------------------------------
- * send_stack()
- * 
- *   This function sends the call stack to the debugger client.  For
- *	 each PL/pgSQL stack frame that we find, we send the function name,
- *	 argument names and values, and the current line number (within 
- *	 that particular invocation).
- */
-
-static void send_stack( dbg_ctx * dbg_info )
-{
-	ErrorContextCallback * entry;
-
-	for( entry = error_context_stack; entry; entry = entry->previous )
-	{
-		/*
-		 * ignore frames for other PL languages
-		 */
-
-		if( entry->callback == dbg_info->error_callback )
-		{
-			send_plpgsql_frame((PLpgSQL_execstate *)( entry->arg ));
-		}
-	}
-
-	dbg_send( "%s", "" );	/* empty string indicates end of list */
-}
-
 /*
  * ---------------------------------------------------------------------
  * sendBreakpoints()
@@ -712,221 +821,14 @@ static void send_stack( dbg_ctx * dbg_info )
  *	later, we'll use the same list managed by the CREATE/
  *	DROP BREAKPOINT commands.
  */
-static void send_breakpoints( PLpgSQL_execstate * frame )
+static Oid
+plpgsql_get_func_oid(ErrorContextCallback *frame)
 {
-	dbg_ctx 		* dbg_info = (dbg_ctx *)frame->plugin_info;
-	Breakpoint      * breakpoint;
-	Oid			 	  funcOid  = dbg_info->func->fn_oid;
-	HASH_SEQ_STATUS	  scan;
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
+	dbg_ctx 		* dbg_info = (dbg_ctx *) estate->plugin_info;
 
-	BreakpointGetList( BP_GLOBAL, &scan );
-
-	while(( breakpoint = (Breakpoint *) hash_seq_search( &scan )) != NULL )
-	{
-		if(( breakpoint->key.targetPid == -1 ) || ( breakpoint->key.targetPid == MyProc->pid ))
-			if( breakpoint->key.databaseId == MyProc->databaseId )
-				if( breakpoint->key.functionId == funcOid )
-					dbg_send( "%d:%d:%s", funcOid, breakpoint->key.lineNumber, "" );
-	}
-
-	BreakpointReleaseList( BP_GLOBAL );
-
-	BreakpointGetList( BP_LOCAL, &scan );
-
-	while(( breakpoint = (Breakpoint *) hash_seq_search( &scan )) != NULL )
-	{
-		if(( breakpoint->key.targetPid == -1 ) || ( breakpoint->key.targetPid == MyProc->pid ))
-			if( breakpoint->key.databaseId == MyProc->databaseId )
-				if( breakpoint->key.functionId == funcOid )
-					dbg_send( "%d:%d:%s", funcOid, breakpoint->key.lineNumber, "" );
-	}
-
-	BreakpointReleaseList( BP_LOCAL );
-
-	dbg_send( "%s", "" );	/* empty string indicates end of list */
-
+	return dbg_info->func->fn_oid;
 }
-
-/*
- * ---------------------------------------------------------------------
- * send_vars()
- *	
- *	This function sends a list variables (names, types, values...)
- *	to the proxy process.  We send information about the variables
- *	defined in the given frame (local variables) and parameter values.
- */
-
-static bool varIsArgument( const PLpgSQL_execstate * frame, int varNo )
-{
-	dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
-
-	if( varNo < dbg_info->func->fn_nargs )
-		return( TRUE );
-	else
-		return( FALSE );
-}
-
-static void send_vars( PLpgSQL_execstate * frame )
-{
-	int       i;
-	dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
-
-	for( i = 0; i < frame->ndatums; i++ )
-	{
-		if( is_var_visible( frame, i ))
-		{
-			switch( frame->datums[i]->dtype )
-			{
-				case PLPGSQL_DTYPE_VAR:
-				{
-					PLpgSQL_var * var = (PLpgSQL_var *) frame->datums[i];
-					char        * val;
-					char		* name = var->refname;
-					bool		  isArg = varIsArgument( frame, i );
-
-					if( datumIsNull((PLpgSQL_datum *)var ))
-						val = "NULL";
-					else
-						val = get_text_val( var, NULL, NULL );
-
-					if( i < dbg_info->argNameCount )
-					{
-						if( dbg_info->argNames && dbg_info->argNames[i] && dbg_info->argNames[i][0] )
-						{
-							name  = dbg_info->argNames[i];
-							isArg = TRUE;
-						}
-					}
-
-					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
-							  name, 
-							  isArg ? 'A' : 'L',
-							  var->lineno,  
-							  dbg_info->symbols[i].duplicate_name ? 'f' : 't',
-							  var->isconst ? 't':'f', 
-							  var->notnull ? 't':'f', 
-							  var->datatype ? var->datatype->typoid : InvalidOid,
-							  val );
-				  
-					break;
-				}
-#if 0
-			FIXME: implement other types
-
-				case PLPGSQL_DTYPE_REC:
-				{
-					PLpgSQL_rec * rec = (PLpgSQL_rec *) frame->datums[i];
-					int		      att;
-					char        * typeName;
-
-					if (rec->tupdesc != NULL)
-					{
-						for( att = 0; att < rec->tupdesc->natts; ++att )
-						{
-							typeName = SPI_gettype( rec->tupdesc, att + 1 );
-	
-							dbg_send( "o:%s.%s:%d:%d:%d:%d:%s\n",
-									  rec->refname, NameStr( rec->tupdesc->attrs[att]->attname ), 
-									  0, rec->lineno, 0, rec->tupdesc->attrs[att]->attnotnull, typeName ? typeName : "" );
-	
-							if( typeName )
-								pfree( typeName );
-						}
-					}
-					break;
-				}
-#endif
-			}
-		}
-	}
-
-#if INCLUDE_PACKAGE_SUPPORT
-	/* If this frame represents a package function/procedure, send the package variables too */
-	if( dbg_info->package != NULL )
-	{
-		PLpgSQL_package * package = dbg_info->package;
-		int				  varIndex;
-
-		for( varIndex = 0; varIndex < package->ndatums; ++varIndex )
-		{
-			PLpgSQL_datum * datum = package->datums[varIndex];
-
-			switch( datum->dtype )
-			{
-				case PLPGSQL_DTYPE_VAR:
-				{
-					PLpgSQL_var * var = (PLpgSQL_var *) datum;
-					char        * val;
-					char		* name = var->refname;
-
-					if( datumIsNull((PLpgSQL_datum *)var ))
-						val = "NULL";
-					else
-						val = get_text_val( var, NULL, NULL );
-
-					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
-							  name, 
-							  'P',				/* variable class - P means package var */
-							  var->lineno,  
-							  'f',				/* duplicate name?						*/
-							  var->isconst ? 't':'f', 
-							  var->notnull ? 't':'f', 
-							  var->datatype ? var->datatype->typoid : InvalidOid,
-							  val );
-				  
-					break;
-				}
-			}
-		}
-	}
-#endif
-
-	dbg_send( "%s", "" );	/* empty string indicates end of list */
-}
-
-
-/*
- * ---------------------------------------------------------------------
- * select_frame()
- *
- *	This function changes the debugger focus to the indicated frame (in the call
- *	stack). Whenever the target stops (at a breakpoint or as the result of a 
- *	step/into or step/over), the debugger changes focus to most deeply nested 
- *  function in the call stack (because that's the function that's executing).
- *
- *	You can change the debugger focus to other stack frames - once you do that,
- *	you can examine the source code for that frame, the variable values in that
- *	frame, and the breakpoints in that target. 
- *
- *	The debugger focus remains on the selected frame until you change it or 
- *	the target stops at another breakpoint.
- */
-
-static PLpgSQL_execstate * select_frame( dbg_ctx * dbg_info, PLpgSQL_execstate * frameZero, int frameNo )
-{
-	ErrorContextCallback * entry;
-
-	for( entry = error_context_stack; entry; entry = entry->previous )
-	{
-		if( entry->callback == dbg_info->error_callback )
-		{
-			if( frameNo-- == 0 )
-			{
-				PLpgSQL_execstate *estate = entry->arg;
-				if (estate->plugin_info == NULL)
-#if (PG_VERSION_NUM >= 80500)
-					initialize_plugin_info(estate, estate->func);
-#else
-					initialize_plugin_info(estate, estate->err_func);
-#endif
-				return( entry->arg );
-			}
-		}
-	}
-
-	return( frameZero );
-}
-
 
 static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 {
@@ -1027,41 +929,24 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
  *		  we convert the value into a literal by surrounding it with
  *		  single quotes.  That may be surprising if you happen to make
  *		  a typo, but it will "do the right thing" in most cases.
+ *
+ * Returns true on success, false on failure.
  */
 
-static void do_deposit( PLpgSQL_execstate * frame, const char * command )
+static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name, int lineno, const char *value)
 {
-	dbg_ctx       *dbg_info   = frame->plugin_info;
-	PLpgSQL_datum *target     = NULL;
-	const char    *var_name   = command + 2;
-	char      	  *value      = strchr( var_name, '=' ); /* FIXME: handle quoted identifiers here */
-	char      	  *lineno     = strchr( var_name, '.' ); /* FIXME: handle quoted identifiers here */
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
+	dbg_ctx       *dbg_info   = estate->plugin_info;
+	PLpgSQL_datum *target;
 	char      	  *select;
-    bool		   retry;
 	PLpgSQL_expr  *expr;
 	MemoryContext  curContext = CurrentMemoryContext;
 	ResourceOwner  curOwner   = CurrentResourceOwner;
+	bool		retval = false;
 
-
-	/* command = d:var.line=expr */
-
-	if( value == NULL || lineno == NULL )
-	{
-		dbg_send( "%s", "f" );
-		return;
-	}
-	
-	*value = '\0';
-	value++;	/* Move past the '=' sign */
-
-	*lineno = '\0';
-	lineno++; 	/* Move past the '.' */
-
-    if(( target = find_datum_by_name( frame, var_name, ( strlen( lineno ) == 0 ? -1 : atoi( lineno )), NULL )) == NULL )
-	{
-		dbg_send( "%s", "f" );
-		return;
-	}
+	target = find_datum_by_name(estate, var_name, lineno, NULL);
+    if (!target)
+		return false;
 
 	/*
 	 * Now build a SELECT statement that returns the requested value
@@ -1101,7 +986,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 	PG_TRY();
 	{
 		if( target )
-			dbg_info->assign_expr( frame, target, expr );
+			dbg_info->assign_expr( estate, target, expr );
 
 		/* Commit the inner transaction, return to outer xact context */
 		ReleaseCurrentSubTransaction();
@@ -1110,10 +995,8 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 
 		SPI_restore_connection();		
 
-		dbg_send( "%s", "t" );
-
-		retry = FALSE;	/* That worked, don't try again */
-
+		/* That worked, don't try again */
+		retval = true;
 	}
 	PG_CATCH();
 	{	
@@ -1132,7 +1015,8 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 
 		SPI_restore_connection();
 
-		retry = TRUE;	/* That failed - try again as a literal */
+		/* That failed - try again as a literal */
+		retval = false;
 	}
 	PG_END_TRY();
 
@@ -1141,7 +1025,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 	 * the value into a literal by sinqle-quoting it.
 	 */
 
-	if( retry )
+	if (!retval)
 	{
 		sprintf( select, "SELECT '%s'", value );
 
@@ -1155,7 +1039,6 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 		expr->nparams          = 0;
 #endif
 
-
 		BeginInternalSubTransaction( NULL );
 
 		MemoryContextSwitchTo( curContext );
@@ -1163,7 +1046,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 		PG_TRY();
 		{
 			if( target )
-				dbg_info->assign_expr( frame, target, expr );
+				dbg_info->assign_expr( estate, target, expr );
 
 			/* Commit the inner transaction, return to outer xact context */
 			ReleaseCurrentSubTransaction();
@@ -1172,7 +1055,7 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 
 			SPI_restore_connection();		
 
-			dbg_send( "%s", "t" );
+			retval = true;
 		}
 		PG_CATCH();
 		{	
@@ -1191,12 +1074,14 @@ static void do_deposit( PLpgSQL_execstate * frame, const char * command )
 
 			SPI_restore_connection();
 
-			dbg_send( "%s", "f" );
+			retval = false;
 		}
 		PG_END_TRY();
 	}
 
 	pfree( select );
+
+	return retval;
 }
 
 /*
@@ -1300,18 +1185,19 @@ static bool is_var_visible( PLpgSQL_execstate * frame, int var_no )
 
 
 /*
- * ---------------------------------------------------------------------
- * send_cur_line()
+ * plpgsql_send_cur_line()
  *
- *	This function sends the current position to the debugger client. We
- *	send the function's OID, xmin, cmin, and the current line number 
- *  (we're telling the client which line of code we're about to execute).
+ * This function sends the current position to the debugger client. We
+ * send the function's OID, xmin, cmin, and the current line number 
+ * (we're telling the client which line of code we're about to execute).
  */
-
-static void send_cur_line( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
+static void
+plpgsql_send_cur_line(ErrorContextCallback *frame)
 {
-    dbg_ctx 		 * dbg_info = (dbg_ctx *)estate->plugin_info;
-	PLpgSQL_function * func     = dbg_info->func;
+	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
+	PLpgSQL_stmt *stmt = estate->err_stmt;
+    dbg_ctx	   *dbg_info = (dbg_ctx *) estate->plugin_info;
+	PLpgSQL_function *func = dbg_info->func;
 
 	dbg_send( "%d:%d:%s",
 			  func->fn_oid,
@@ -1432,8 +1318,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			 * breakpoint on the second invocation.
 			 *
 			 * We want to remove that breakpoint so that we don't keep trying
-			 * to attach to a phantom proxy process (that's rather expensive 
-			 * on Win32 or when the proxy is on another host).
+			 * to attach to a phantom proxy process.
 			 */
 			if( breakpoint )
 				BreakpointDelete( breakpointScope, &(breakpoint->key));
@@ -1453,7 +1338,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			return;
 
 		/*
-		 * The PL/pgSQL compiler inserts an automatic RETURN stat1ement at the
+		 * The PL/pgSQL compiler inserts an automatic RETURN statement at the
 		 * end of each function (unless the last statement in the function is
 		 * already a RETURN). If we run into that statement, we don't really
 		 * want to wait for the user to STEP across it. Remember, the user won't
@@ -1472,9 +1357,6 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 
 		if( dbg_info->stepping )
 		{
-			bool	need_more     = TRUE;
-			char   *command;
-
 			/*
 			 * Make sure that we have all of the debug info that we need in this stack frame
 			 */
@@ -1486,141 +1368,8 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			 * variable modifications
 			 */
 
-			send_cur_line( frame, stmt );			/* Report the current location 				 */
-
-			/* 
-			 *Loop through the following chunk of code until we get a command
-			 * from the user that would let us execute this PL/pgSQL statement.
-			 */
-			while( need_more )
-			{
-				/* Wait for a command from the debugger client */
-				command = dbg_read_str();
-
-				/*
-				 * The debugger client sent us a null-terminated command string
-				 *
-				 * Each command starts with a single character and is
-				 * followed by set of optional arguments.
-				 */
-
-				switch( command[0] )
-				{
-					case PLDBG_CONTINUE:
-					{
-						/*
-						 * Continue (stop single-stepping and just run to the next breakpoint)
-						 */
-						dbg_info->stepping = 0;
-						need_more = FALSE;
-						break;
-					}
-
-					case PLDBG_SET_BREAKPOINT:
-					{
-						setBreakpoint( command );
-						break;
-					}
-				
-					case PLDBG_CLEAR_BREAKPOINT:
-					{
-						clearBreakpoint( command );
-						break;
-					}
-
-					case PLDBG_PRINT_VAR:
-					{
-						/*
-						 * Print value of given variable 
-						 */
-
-						dbg_printvar( frame, &command[2], -1 );
-						break;
-					}
-
-					case PLDBG_LIST_BREAKPOINTS:
-					{
-						send_breakpoints( frame );
-						break;
-					}
-
-					case PLDBG_STEP_INTO:
-					{
-						/* 
-						 * Single-step/step-into
-						 */
-						per_session_ctx.step_into_next_func = TRUE;
-						need_more = FALSE;
-						break;
-					}
-
-					case PLDBG_STEP_OVER:
-					{
-						/*
-						 * Single-step/step-over
-						 */
-						need_more = FALSE;
-						break;
-					}
-
-					case PLDBG_LIST:
-					{
-						/*
-						 * Send source code for given function
-						 */
-						dbg_send_src( command );
-						break;
-					}
-
-					case PLDBG_PRINT_STACK:
-					{
-						send_stack( dbg_info );
-						break;
-					}
-
-					case PLDBG_SELECT_FRAME:
-					{
-						frame = select_frame( dbg_info, estate, atoi( &command[2] ));
-						send_cur_line( frame, frame->err_stmt );	/* Report the current location 				 */
-						break;
-
-					}
-
-					case PLDBG_DEPOSIT:
-					{
-						/* 
-						 * Deposit a new value into the given variable
-						 */
-						do_deposit( frame, command );
-						break;
-					}
-
-					case PLDBG_INFO_VARS:
-					{
-						/*
-						 * Send list of variables (and their values)
-						 */
-						send_vars( frame );
-						break;
-					}
-					
-					case PLDBG_RESTART:
-					case PLDBG_STOP:
-					{
-						/* stop the debugging session */
-						dbg_send( "%s", "t" );
-
-						ereport(ERROR,
-								(errcode(ERRCODE_QUERY_CANCELED),
-								 errmsg("canceling statement due to user request")));
-						break;
-					}
-					
-					default:
-						elog(WARNING, "Unrecognized message %c", command[0]);
-				}
-				pfree(command);
-			}
+			if (!plugin_debugger_main_loop())
+				dbg_info->stepping = FALSE;
 		}
 	}
 	

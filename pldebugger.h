@@ -53,7 +53,23 @@ extern errorHandlerCtx client_lost;
 #define PLDBG_RESTART				'r'
 #define PLDBG_STOP				'x'
 
+typedef struct
+{
+	void	(* initialize)(void);
+	bool	(* frame_belongs_to_me)(ErrorContextCallback *frame);
+	void	(* send_stack_frame)(ErrorContextCallback *frame);
+	void	(* send_vars)(ErrorContextCallback *frame);
+	void	(* select_frame)(ErrorContextCallback *frame);
+	void	(* print_var)(ErrorContextCallback *frame, const char *var_name, int lineno);
+	bool	(* do_deposit)(ErrorContextCallback *frame, const char *var_name,
+						   int line_number, const char *value);
+	Oid		(* get_func_oid)(ErrorContextCallback *frame);
+	void	(* send_cur_line)(ErrorContextCallback *frame);
+} debugger_language_t;
+
 /* in plugin_debugger.c */
+extern bool plugin_debugger_main_loop(void);
+
 extern bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, int lineNumber );
 extern bool attach_to_proxy( Breakpoint * breakpoint );
 extern char * findSource( Oid oid, HeapTuple * tup );
@@ -71,7 +87,11 @@ __attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)))
 extern char 	   * dbg_read_str(void);
 
 /* in plpgsql_debugger.c */
-extern void plpgsql_debugger_init(void);
 extern void plpgsql_debugger_fini(void);
+
+extern debugger_language_t plpgsql_debugger_lang;
+#ifdef INCLUDE_PACKAGE_SUPPORT
+extern debugger_language_t spl_debugger_lang;
+#endif
 
 #endif

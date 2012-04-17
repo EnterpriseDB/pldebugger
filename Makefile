@@ -60,14 +60,6 @@ include $(top_srcdir)/src/Makefile.shlib
 all: all-lib
 endif # PLUGIN_big
 
-
-ifeq ($(PORTNAME), win32)
-SHLIB_LINK += -lwsock32
-SYMLINKCMD  = cp
-else
-SYMLINKCMD  = ln -s
-endif
-
 ifeq ($(PORTNAME), win32)
 override CFLAGS += $(CFLAGS_SL) -I$(top_builddir)/src/pl/plpgsql/src
 else
@@ -88,7 +80,7 @@ install-plugins: installdir-plugins $(addsuffix $(DLSUFFIX), $(PLUGIN_big))
 	$(INSTALL_SHLIB) $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) '$(DESTDIR)$(pkglibdir)/plugins/'
 
 clean-plugins:
-	rm -f $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) $(PLUGIN_OBJS)
+	rm -f $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) $(PLUGIN_OBJS) spl_debugger.c
 
 uninstall-plugins:
 	rm -f $(addprefix '$(DESTDIR)$(pkglibdir)'/plugins/, $(addsuffix $(DLSUFFIX), $(PLUGIN_big)))
@@ -110,15 +102,22 @@ plpgsql_debugger.o: CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
 ## debugger module for the SPL language. It's pretty much the same as the
 ## PL/pgSQL one, but the structs have some extra fields and are thus not
 ## binary-compatible. We make a copy of the .c file, and pass the
-## INCLUDE_PACKAGE_SUPPORT=1 flag to compile it against SPL instead of PL/pgSQL
+## INCLUDE_PACKAGE_SUPPORT=1 flag to compile it against SPL instead of PL/pgSQL.
+##
+## To make debugging the debugger itself simpler, all the functions are
+## mechanically renamed from plpgsql_* to spl_*.
 ##
 ## To enable this, you need to run make as "make INCLUDE_PACKAGE_SUPPORT=1"
 ## 
 ifdef INCLUDE_PACKAGE_SUPPORT
 spl_debugger.c:  plpgsql_debugger.c
-	$(SYMLINKCMD) $(module_srcdir)plpgsql_debugger.c spl_debugger.c
+	sed -e 's/plpgsql_/spl_/g' $(module_srcdir)plpgsql_debugger.c > spl_debugger.c
 
 spl_debugger.o: 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1 -I$(top_builddir)/src/pl/edb-spl/src
+
+# There's some tiny differences in plugin_debugger.c, if we're including SPL
+# language. Pass the INCLUDE_PACKAGE_SUPPORT flag to plugin_debugger.c too.
+plugin_debugger.o: CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1
 endif
 
 ################################################################################
