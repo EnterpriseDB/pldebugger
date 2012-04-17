@@ -13,8 +13,6 @@
 CREATE TYPE breakpoint AS ( func OID, linenumber INTEGER, targetName TEXT );
 CREATE TYPE frame      AS ( level INT, targetname TEXT, func OID, linenumber INTEGER, args TEXT );
 
-CREATE TYPE targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvector, targetName NAME, argModes "char"[], argNames TEXT[], targetLang OID, fqName TEXT, returnsSet BOOL, returnType OID );
-
 CREATE TYPE var		   AS ( name TEXT, varClass char, lineNumber INTEGER, isUnique bool, isConst bool, isNotNull bool, dtype OID, value TEXT );
 CREATE TYPE proxyInfo  AS ( serverVersionStr TEXT, serverVersionNum INT, proxyAPIVer INT, serverProcessID INT );
 
@@ -38,6 +36,43 @@ CREATE FUNCTION pldbg_step_into( session INTEGER ) RETURNS breakpoint AS '$libdi
 CREATE FUNCTION pldbg_step_over( session INTEGER ) RETURNS breakpoint AS '$libdir/pldbgapi' LANGUAGE C STRICT;
 CREATE FUNCTION pldbg_wait_for_breakpoint( session INTEGER ) RETURNS breakpoint  AS '$libdir/pldbgapi' LANGUAGE C STRICT;
 CREATE FUNCTION pldbg_wait_for_target( session INTEGER ) RETURNS INTEGER AS '$libdir/pldbgapi' LANGUAGE C STRICT;
-CREATE FUNCTION pldbg_get_target_info( signature TEXT, targetType "char" ) RETURNS targetInfo AS '$libdir/pldbgapi' LANGUAGE C STRICT;
 
+/*
+ * pldbg_get_target_info() function can be used to return information about
+ * a function.
+ *
+ * Deprecated. This is used by the pgAdmin debugger GUI, but new applications
+ * should just query the catalogs directly.
+ */
+CREATE TYPE targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvector, targetName NAME, argModes "char"[], argNames TEXT[], targetLang OID, fqName TEXT, returnsSet BOOL, returnType OID );
+CREATE FUNCTION pldbg_get_target_info(signature text, targetType "char") returns targetinfo AS $$
+  SELECT p.oid AS target,
+         pronamespace AS schema,
+         pronargs::int4 AS nargs,
+         -- The returned argtypes column is of type oidvector, but unlike
+         -- proargtypes, it's supposed to include OUT params. So we
+         -- essentially have to return proallargtypes, converted to an
+         -- oidvector. There is no oid[] -> oidvector cast, so we have to
+         -- do it via text.
+         CASE WHEN proallargtypes IS NOT NULL THEN
+           translate(proallargtypes::text, ',{}', ' ')::oidvector
+         ELSE
+           proargtypes
+         END AS argtypes,
+         proname AS targetname,
+         proargmodes AS argmodes,
+         proargnames AS proargnames,
+         prolang AS targetlang,
+         quote_ident(nspname) || '.' || quote_ident(proname) AS fqname,
+         proretset AS returnsset,
+         prorettype AS returntype
+  FROM pg_proc p, pg_namespace n
+  WHERE p.pronamespace = n.oid
+  AND p.oid = $1::oid
+  -- We used to support querying by function name or trigger name/oid as well,
+  -- but that was never used in the client, so the support for that has been
+  -- removed. The targeType argument remains as a legacy of that. You're
+  -- expected to pass 'o' as target type, but it doesn't do anything.
+  AND $2 = 'o'
+$$ LANGUAGE SQL;
 
