@@ -38,6 +38,6 @@ CREATE FUNCTION pldbg_step_into( session INTEGER ) RETURNS breakpoint AS '$libdi
 CREATE FUNCTION pldbg_step_over( session INTEGER ) RETURNS breakpoint AS '$libdir/pldbgapi' LANGUAGE C STRICT;
 CREATE FUNCTION pldbg_wait_for_breakpoint( session INTEGER ) RETURNS breakpoint  AS '$libdir/pldbgapi' LANGUAGE C STRICT;
 CREATE FUNCTION pldbg_wait_for_target( session INTEGER ) RETURNS INTEGER AS '$libdir/pldbgapi' LANGUAGE C STRICT;
-CREATE FUNCTION pldbg_get_target_info( signature TEXT, targetType "char" ) RETURNS targetInfo AS '$libdir/targetinfo' LANGUAGE C STRICT;
+CREATE FUNCTION pldbg_get_target_info( signature TEXT, targetType "char" ) RETURNS targetInfo AS '$libdir/pldbgapi' LANGUAGE C STRICT;
 
 

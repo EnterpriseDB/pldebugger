@@ -33,15 +33,6 @@
 #include "access/genam.h"
 #include "utils/tqual.h"
 
-/*
- * Let the PG module loader know that we are compiled against
- * the right version of the PG header files
- */
-
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
-
 /*******************************************************************************
  * Structure targetInfo
  *

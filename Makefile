@@ -26,7 +26,11 @@
 ## for full details
 
 EXTENSION  = pldbgapi
-MODULES    = pldbgapi targetinfo
+MODULE_big = pldbgapi
+
+# files for building pldbgapi.so
+OBJS	   = pldbgapi.o targetinfo.o
+
 PLUGINS    = plugin_debugger
 DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
 DOCS	   = README.pldebugger
