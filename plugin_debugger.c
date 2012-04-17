@@ -1980,6 +1980,41 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
 	 */
 	dbg_info->error_callback = plugin_funcs.error_callback;
 	dbg_info->assign_expr    = plugin_funcs.assign_expr;
+
+#if INCLUDE_PACKAGE_SUPPORT
+	/*
+	 * Look up the package this function belongs to.
+	 *
+	 * Inline code blocks have invalid fn_oid. They never belong to packages.
+	 */
+	if (OidIsValid(dbg_info->func->fn_oid))
+	{
+		/*
+		 * Find the namespace in which this function/procedure is defined
+		 */
+		HeapTuple	htup;
+		Oid			namespaceOid;
+
+		htup = SearchSysCache(PROCOID, ObjectIdGetDatum(dbg_info->func->fn_oid), 0, 0, 0);
+
+		if (!HeapTupleIsValid(htup))
+			elog(ERROR, "cache lookup failed for procedure %d", dbg_info->func->fn_oid);
+
+		namespaceOid = ((Form_pg_proc)GETSTRUCT(htup))->pronamespace;
+
+		ReleaseSysCache(htup);
+
+		/*
+		 * Now figure out if this namespace is a package or a schema
+		 *
+		 * NOTE: we could read the pg_namespace tuple and check pg_namespace.nspparent,
+		 *		 but it's faster to just search for the namespaceOid in the global
+		 *		 package array instead; we have to do that anyway to find the package
+		 */
+
+		dbg_info->package = plugin_funcs.get_package( namespaceOid );
+	}
+#endif
 }
 
 /*
