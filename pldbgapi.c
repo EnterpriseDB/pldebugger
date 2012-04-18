@@ -73,8 +73,8 @@
  *	running).  You can shift the debugger's focus to a different frame
  *	by calling pldbg_select_frame().
  *
- *	The focus is important because many functions (such as pldbg_get_variables()) 
- *  work against the stack frame that has the focus.
+ *	The focus is important because many functions (such as
+ *	pldbg_get_variables()) work against the stack frame that has the focus.
  *
  *	Any of the proxy functions may throw an error - in particular, a proxy
  *	function will throw an error if the target process ends.  You're most
@@ -89,34 +89,27 @@
  */
 
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "utils/memutils.h"
 #include "utils/builtins.h"
-#include "utils/fmgroids.h"							/* For F_NAMEEQ					*/
-#include "utils/array.h"							/* For DatumGetArrayTypePCopy()	*/
-#include "storage/ipc.h"							/* For on_proc_exit()  			*/
-#include "storage/proc.h"							/* For MyProc		   			*/
-#include "storage/procarray.h"						/* For BackendPidGetProc		*/
-#include "libpq/libpq-be.h"							/* For Port						*/
-#include "miscadmin.h"								/* For MyProcPort				*/
-#include  "utils/catcache.h"
-#include  "utils/syscache.h"
+#include "storage/ipc.h"					/* For on_proc_exit()  			*/
+#include "storage/proc.h"					/* For MyProc		   			*/
+#include "storage/procarray.h"				/* For BackendPidGetProc		*/
+#include "libpq/libpq-be.h"					/* For Port						*/
+#include "miscadmin.h"						/* For MyProcPort				*/
 #include "catalog/pg_proc.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
-#include "catalog/indexing.h"						/* For TriggerRelidNameIndexId	*/
-#include "globalbp.h"
-#include "parser/parse_type.h"						/* For parseTypeString()		*/
-#include "access/heapam.h"							/* For heap_form_tuple()		*/
-#include "access/genam.h"
-#include "access/hash.h"							/* For dynahash stuff			*/
+#include "access/heapam.h"					/* For heap_form_tuple()		*/
+#include "access/hash.h"					/* For dynahash stuff			*/
+
 #include <errno.h>
-#include <unistd.h>									/* For close()					*/
+#include <unistd.h>							/* For close()					*/
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include "globalbp.h"
 
 /*
  * Let the PG module loader know that we are compiled against
@@ -152,15 +145,6 @@ PG_FUNCTION_INFO_V1( pldbg_create_listener );		/* Create a listener for global b
 PG_FUNCTION_INFO_V1( pldbg_wait_for_target );		/* Wait for a global breakpoint to fire			*/
 PG_FUNCTION_INFO_V1( pldbg_set_global_breakpoint );	/* Create a global breakpoint					*/
 
-
-#if 0
-
-/* Not yet implemented */
-PG_FUNCTION_INFO_V1( pldbg_enable_breakpoint );		/* Enable the given breakpoint					*/
-PG_FUNCTION_INFO_V1( pldbg_disable_breakpoint );	/* Disable (but don't delete) a breakpoint  	*/
-
-#endif
-
 /*******************************************************************************
  * Structure debugSession
  *
@@ -185,11 +169,11 @@ typedef struct
  * Stucture sessionHashEntry
  *
  *	As mentioned above (see debugSession), a debugger proxy can manage many
- *	debug sessions at once.  To keep track of each session, we create a debugSession
- *	object and return a handle to that object to the caller.  The handle is an
- *  opaque value - it's just an integer value.  To convert a handle into an actual
- *	debugSession pointer, we create a hash that maps handles into debugSession
- *  pointers.
+ *	debug sessions at once.  To keep track of each session, we create a
+ *	debugSession object and return a handle to that object to the caller.  The
+ *	handle is an opaque value - it's just an integer value.  To convert a
+ *	handle into an actual debugSession pointer, we create a hash that maps
+ *	handles into debugSession pointers.
  *
  *  Each member of the hash is shaped like a sessionHashEntry object.
  */
@@ -307,24 +291,31 @@ static TupleDesc	  	 getResultTupleDesc( FunctionCallInfo fcinfo );
 
 Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 {
-	debugSession       * session  = MemoryContextAlloc( TopMemoryContext, sizeof( *session ));
+	debugSession       * session;
 	struct sockaddr_in   serverAddress = {0};
 	char			   * targetProtoVersion;
 
 	initializeModule();
 
+	session = MemoryContextAlloc( TopMemoryContext, sizeof( *session ));
 	session->serverPort = PG_GETARG_UINT32( 0 );
 	session->listener   = -1;
-   
-	if(( session->serverSocket = socket( AF_INET, SOCK_STREAM, 0 )) < 0 )
-		ereport( ERROR, ( errcode_for_socket_access(), errmsg( "could not create socket for debugger connection" )));
-		
+
+	if ((session->serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		ereport(ERROR,
+				(errcode_for_socket_access(),
+				 errmsg("could not create socket for debugger connection")));
+
 	serverAddress.sin_family 	  = AF_INET;
 	serverAddress.sin_addr.s_addr = resolveHostName( "127.0.0.1" );
 	serverAddress.sin_port        = htons( session->serverPort );
 
-	if( connect( session->serverSocket, (struct sockaddr *)&serverAddress, sizeof( serverAddress )) < 0 )
-		ereport( ERROR, (errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "could not connect to debug target" )));
+	if (connect(session->serverSocket,
+				(struct sockaddr *) &serverAddress,
+				sizeof(serverAddress)) < 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_CONNECTION_FAILURE),
+				 errmsg("could not connect to debug target")));
 
 	/*
 	 * To convince the debugger server that we are a valid proxy (as opposed
@@ -348,9 +339,9 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 	sendBytes( session, &MyProc, sizeof(MyProc));
 
 	if( !getBool( session ))
-	{
-		ereport( ERROR, (errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "debugger server refused authentication" )));
-	}
+		ereport(ERROR,
+				(errcode(ERRCODE_CONNECTION_FAILURE),
+				 errmsg("debugger server refused authentication")));
 
 	/*
 	 * Now exchange version information with the target - for now,
@@ -372,7 +363,8 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 	 * the local breakpoint that it hit. Read it. We will hand it to the client
 	 * if it calls wait_for_breakpoint().
 	 */
-	session->breakpointString = MemoryContextStrdup(TopMemoryContext, getNString( session ));
+	session->breakpointString = MemoryContextStrdup(TopMemoryContext,
+													getNString(session));
 
 	/*
 	 * For convenience, remember the most recent session - if you call
@@ -381,7 +373,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 	 */
 	mostRecentSession = session;
 
-	PG_RETURN_INT32( addSession(session));
+	PG_RETURN_INT32(addSession(session));
 }
 
 Datum pldbg_create_listener( PG_FUNCTION_ARGS ) 
@@ -401,11 +393,11 @@ Datum pldbg_create_listener( PG_FUNCTION_ARGS )
 /*******************************************************************************
  * pldbg_wait_for_target( ) RETURNS INTEGER
  *
- * 	This function advertises the proxy process as an active debugger, waiting for 
- *	global breakpoints.
+ *	This function advertises the proxy process as an active debugger, waiting
+ *	for global breakpoints.
  *
  *	This function returns a session handle that identifies this particular debug
- * 	session. When you call any of the other pldbg functions, you must supply
+ *	session. When you call any of the other pldbg functions, you must supply
  *	this session handle.
  *
  *	A given debugger client can maintain multiple simultaneous sessions 
@@ -437,7 +429,8 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		timeout.tv_usec = 0;
 
 		/*
-		 * Now mark all of our global breakpoints as 'available' (that is, not busy)
+		 * Now mark all of our global breakpoints as 'available' (that is, not
+		 * busy)
 		 */
 		BreakpointFreeSession( MyProc->pid );
 
@@ -484,10 +477,15 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 		serverOff = getAddress( session );
 		serverProc = BackendPidGetProc(serverPID);
 		
-		if (serverProc == NULL || serverProc != serverOff) {
-			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
-						  errmsg( "invalid debugger connection credentials")));
-			/* This doesn't look like a valid server - he didn't send us the right info */
+		if (serverProc == NULL || serverProc != serverOff)
+		{
+			/*
+			 * This doesn't look like a valid server - he didn't send us the
+			 * right info
+			 */
+			ereport(LOG,
+					(ERRCODE_CONNECTION_FAILURE, 
+					 errmsg( "invalid debugger connection credentials")));
 			sendString( session, "f" );
 #ifdef WIN32
 			closesocket( session->serverSocket );
@@ -500,20 +498,20 @@ Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 
 		/*
 		 * FIXME: this function should return a tuple that contains information
-		 *  	  about the target we just nabbed - the process ID, user name, ...
+		 * about the target we just nabbed - the process ID, user name, ...
 		 */
-		
+
 		sendString( session, "t" );
-		
+
 		/*
 		 * The server now sends it's protocol version and we
 		 * reply with ours
 		 */
 		serverProtoVersion = getNString( session );
 		sendString( session, PROXY_PROTO_VERSION );
-		
+
 		mostRecentSession = session;
-		
+
 		PG_RETURN_UINT32( serverPID );
 	}
 }
@@ -531,10 +529,14 @@ Datum pldbg_set_global_breakpoint( PG_FUNCTION_ARGS )
 	Breakpoint	   breakpoint;
 
 	if( !superuser())
-		ereport( ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg( "must be a superuser to create a breakpoint" )));
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be a superuser to create a breakpoint")));
 
 	if( session->listener == -1 )
-		ereport( ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE), errmsg( "given session is not a listener" )));
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("given session is not a listener")));
 
 	breakpoint.key.databaseId = MyProc->databaseId;
 	breakpoint.key.functionId = PG_GETARG_OID( 1 );
@@ -554,8 +556,10 @@ Datum pldbg_set_global_breakpoint( PG_FUNCTION_ARGS )
 	breakpoint.data.proxyPid  = MyProc->pid;
 
 	if( !BreakpointInsert( BP_GLOBAL, &breakpoint.key, &breakpoint.data ))
-		ereport( ERROR, (errcode(ERRCODE_OBJECT_IN_USE), errmsg( "another debugger is already waiting for that breakpoint" )));
-		
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_IN_USE),
+				 errmsg("another debugger is already waiting for that breakpoint")));
+
 	PG_RETURN_BOOL( true );
 }
 
@@ -563,10 +567,11 @@ Datum pldbg_set_global_breakpoint( PG_FUNCTION_ARGS )
  * pldbg_wait_for_breakpoint( sessionID INTEGER ) RETURNS breakpoint
  *
  *	This function waits for the debug target to reach a breakpoint.  You should
- *	call this function immediately after pldbg_attach_to_port() returns a session
- *	ID.  pldbg_wait_for_breakpoint() is nearly identical to pldbg_step_into(), 
- *	pldbg_step_over(), and pldbg_continue(), (they all wait for the target) but
- *	this function does not send a command to the target first.
+ *	call this function immediately after pldbg_attach_to_port() returns a
+ *	session ID.  pldbg_wait_for_breakpoint() is nearly identical to
+ *	pldbg_step_into(), pldbg_step_over(), and pldbg_continue(), (they all wait
+ *	for the target) but	this function does not send a command to the target
+ *	first.
  *
  *	This function returns a tuple of type 'breakpoint' - such a tuple contains
  *	the function OID, package OID, and line number where the target is currently
@@ -610,8 +615,8 @@ Datum pldbg_wait_for_breakpoint( PG_FUNCTION_ARGS )
  *	This function sends a "step/into" command to the debugger target and then
  *  waits for target to reach the next executable statement.
  *
- *	This function returns a tuple of type 'breakpoint' that contains the function
- *  OID, package OID, and line number where the target is currently stopped.
+ *	This function returns a tuple of type 'breakpoint' that contains the
+ *	function OID and line number where the target is currently stopped.
  */
 
 Datum pldbg_step_into( PG_FUNCTION_ARGS )
@@ -628,12 +633,12 @@ Datum pldbg_step_into( PG_FUNCTION_ARGS )
  *
  *	This function sends a "step/over" command to the debugger target and then
  *  waits for target to reach the next executable statement within the current
- *	function.  If the target encounters a breakpoint (presumably in a child 
+ *	function.  If the target encounters a breakpoint (presumably in a child
  *	invocation) before reaching the next executable line, it will stop at the
  *	breakpoint.
  *
- *	This function returns a tuple of type 'breakpoint' that contains the function
- *  OID, package OID, and line number where the target is currently stopped.
+ *	This function returns a tuple of type 'breakpoint' that contains the
+ *	function OID and line number where the target is currently stopped.
  */
 
 Datum pldbg_step_over( PG_FUNCTION_ARGS )
@@ -651,8 +656,8 @@ Datum pldbg_step_over( PG_FUNCTION_ARGS )
  *	This function sends a "continue" command to the debugger target and then
  *  waits for target to reach a breakpoint.
  *
- *	This function returns a tuple of type 'breakpoint' that contains the function
- *  OID, package OID, and line number where the target is currently stopped.
+ *	This function returns a tuple of type 'breakpoint' that contains the
+ *	function OID and line number where the target is currently stopped.
  */
 
 Datum pldbg_continue( PG_FUNCTION_ARGS )
@@ -697,8 +702,8 @@ Datum pldbg_abort_target( PG_FUNCTION_ARGS )
  *	The debugger focus remains on the selected frame until you change it or 
  *	the target stops at another breakpoint.
  *
- *	This function returns a tuple of type 'breakpoint' that contains the function
- *  OID, package OID, and line number where the target is currently stopped in 
+ *	This function returns a tuple of type 'breakpoint' that contains the
+ *	function OID, and line number where the target is currently stopped in
  *	the selected frame.
  */
 
@@ -748,26 +753,14 @@ Datum pldbg_get_source( PG_FUNCTION_ARGS )
 	Oid			   funcOID = PG_GETARG_OID( 1 );
 	char		   sourceString[13];		/* 10 digits(oid) + space + 1 command + null terminator */
 	char		 * source;
-	size_t		   sourceLength;
-	text		 * result;
 
 	sprintf( sourceString, "%s %d", PLDBG_GET_SOURCE, funcOID );
 
 	sendString( session, sourceString );
 
 	source 		 = getNString( session );
-	sourceLength = strlen( source );
-	result 		 = (text *)palloc(sourceLength + VARHDRSZ);
 
-#ifdef SET_VARSIZE
-	SET_VARSIZE(result, sourceLength + VARHDRSZ);
-#else
-	VARATT_SIZEP(result) = sourceLength + VARHDRSZ;
-#endif
-
-	memcpy(VARDATA(result), source, sourceLength);
-
-	PG_RETURN_TEXT_P(result);
+	PG_RETURN_TEXT_P(cstring_to_text(source));
 }
 
 /*******************************************************************************
@@ -829,8 +822,8 @@ Datum pldbg_get_breakpoints( PG_FUNCTION_ARGS )
  *	is NOT NULL, the data type of the variable (the OID of the corresponding
  *	pg_type) and the value of the variable.
  *
- *	To view variables defined in a different stack frame, call pldbg_select_frame()
- *	to change the debugger's focus to that frame.
+ *	To view variables defined in a different stack frame, call
+ *	pldbg_select_frame() to change the debugger's focus to that frame.
  */
 
 Datum pldbg_get_variables( PG_FUNCTION_ARGS )
@@ -1283,14 +1276,15 @@ static void * readn( int serverHandle, void * dst, size_t len )
 		ssize_t		bytesRead;
 
 		/*
-		 * Note: we want to wait for some number of bytes to arrive from the target process, but
-		 *	     we also want to notice if the client process disappears.  To do that, we'll call
-		 *	     select() before we call recv() and we'll tell select() to return as soon as 
-		 *		 something interesting happens on *either* of the sockets.  If the target sends
-		 *		 us data first, we're ok (that's what we are expecting to happen).  If we some
-		 *		 some activity on the client-side socket (which is the libpq socket),w we can
-		 *		 assume that something's gone horribly wrong (most likely, the user killed the
-		 *		 client by clicking the close button).
+		 * Note: we want to wait for some number of bytes to arrive from the
+		 * target process, but we also want to notice if the client process
+		 * disappears.  To do that, we'll call select() before we call recv()
+		 * and we'll tell select() to return as soon as something interesting
+		 * happens on *either* of the sockets.  If the target sends us data
+		 * first, we're ok (that's what we are expecting to happen).  If we
+		 * detect any activity on the client-side socket (which is the libpq
+		 * socket), we can assume that something's gone horribly wrong (most
+		 * likely, the user killed the client by clicking the close button).
 		 */
 
 		FD_ZERO( &rmask );
@@ -1315,10 +1309,11 @@ static void * readn( int serverHandle, void * dst, size_t len )
 			default:
 			{
 				/*
-				 * We got traffic on one of the two sockets.  If we see traffic from the 
-				 * client (libpq) connection, just return to the caller so that libpq can
-				 * process whatever's waiting.  Presumably, the only time we'll see any
-				 * libpq traffic here is when the client process has killed itself...
+				 * We got traffic on one of the two sockets.  If we see traffic
+				 * from the client (libpq) connection, just return to the
+				 * caller so that libpq can process whatever's waiting.
+				 * Presumably, the only time we'll see any libpq traffic here
+				 * is when the client process has killed itself...
 				 */
 
 				if( FD_ISSET( MyProcPort->sock, &rmask ))
@@ -1337,7 +1332,6 @@ static void * readn( int serverHandle, void * dst, size_t len )
 
 		bytesRemaining -= bytesRead;
 		buffer         += bytesRead;
-			
 	}
 
 	return( dst );
@@ -1365,7 +1359,7 @@ static void * writen( int serverHandle, void * src, size_t len )
 			ereport( ERROR, ( errcode( ERRCODE_CONNECTION_FAILURE ), errmsg( "debugger connection terminated" )));
 			return( NULL );
 		}
-		
+
 		bytesRemaining -= bytesWritten;
 		buffer         += bytesWritten;
 	}
@@ -1417,12 +1411,12 @@ static void sendString( debugSession * session, char * src )
 	sendBytes( session, src, len );
 }
 
-/*****************************************************************************************
+/*******************************************************************************
  * getBool()
  *
- *	getBool() retreives a boolean value (TRUE or FALSE) from the server.  We call this 
- *	function after we ask the server to do something that returns a boolean result (like
- *	deleting a breakpoint or depositing a new value).
+ *	getBool() retreives a boolean value (TRUE or FALSE) from the server.  We
+ *	call this function after we ask the server to do something that returns a
+ *	boolean result (like deleting a breakpoint or depositing a new value).
  */
 
 static bool getBool( debugSession * session )
@@ -1554,19 +1548,15 @@ static void closeSession( debugSession * session )
 		shutdown( session->serverSocket, SHUT_WR );
         close( session->serverSocket );
 #endif
-		
 	}
 
 	if( session->listener )
-	{
 		BreakpointCleanupProc( MyProcPid );
-	}
 
 	if( session->breakpointString )
 		pfree( session->breakpointString );
 
 	pfree( session );
-
 }
 
 /******************************************************************************
@@ -1589,6 +1579,7 @@ static void cleanupAtExit( int code, Datum arg )
 
 	mostRecentSession = NULL;
 }
+
 static int allocateServerListener( int * port )
 {
 	int	 						sockfd       	= socket( AF_INET, SOCK_STREAM, 0 );
