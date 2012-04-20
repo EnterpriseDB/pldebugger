@@ -85,6 +85,7 @@ static dbgcomm_target_slot_t *dbgcomm_slots = NULL;
 static void dbgcomm_init(void);
 static uint32 resolveHostName(const char *hostName);
 static int findFreeTargetSlot(void);
+static int findTargetSlot(BackendId backendid);
 
 /**********************************************************************
  * Initialization routines
@@ -277,7 +278,10 @@ dbgcomm_listen_for_proxy(void)
 		return -1;
 	}
 
-	/* Bind a listener socket to that port */
+	/* Bind the listener socket to any available port */
+	localaddr.sin_family	  = AF_INET;
+	localaddr.sin_port		  = htons( 0 );
+	localaddr.sin_addr.s_addr = resolveHostName( "127.0.0.1" );
 	if (bind( sockfd, (struct sockaddr *) &localaddr, sizeof(localaddr)) < 0)
 	{
 		ereport(COMMERROR,
@@ -312,7 +316,7 @@ dbgcomm_listen_for_proxy(void)
 	}
 	dbgcomm_slots[slot].port = localport;
 	dbgcomm_slots[slot].status = DBGCOMM_LISTENING_FOR_PROXY;
-	dbgcomm_slots[slot].pid = MyBackendId;
+	dbgcomm_slots[slot].backendid = MyBackendId;
 	dbgcomm_slots[slot].pid = MyProcPid;
 	LWLockRelease(getPLDebuggerLock());
 
@@ -370,6 +374,7 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 	int			reuse_addr_flag = 1;
 	int			localport;
 	int			remoteport;
+	int			slot;
 
 	dbgcomm_init();
 
@@ -407,19 +412,20 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 	localport = ntohs(localaddr.sin_port);
 
 	/*
-	 * Check which port the backend is listening on, and let it know we're
-	 * connecting to it from this port.
+	 * Find the target backend's slot. Check which port it's listening on, and
+	 * let it know we're connecting to it from this port.
 	 */
 	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-	if (dbgcomm_slots[targetBackend].status != DBGCOMM_LISTENING_FOR_PROXY)
+	slot = findTargetSlot(targetBackend);
+	if (slot < 0 || dbgcomm_slots[slot].status != DBGCOMM_LISTENING_FOR_PROXY)
 	{
 		closesocket(sockfd);
 		ereport(ERROR,
 				(errmsg("target backend is not listening for a connection")));
 	}
-	remoteport = dbgcomm_slots[targetBackend].port;
-	dbgcomm_slots[targetBackend].port = localport;
-	dbgcomm_slots[targetBackend].status = DBGCOMM_PROXY_CONNECTING;
+	remoteport = dbgcomm_slots[slot].port;
+	dbgcomm_slots[slot].port = localport;
+	dbgcomm_slots[slot].status = DBGCOMM_PROXY_CONNECTING;
 	LWLockRelease(getPLDebuggerLock());
 
 	/* Now connect to the other end. */
@@ -594,7 +600,7 @@ dbgcomm_listen_for_target(int *port)
 /*
  * Find first available target slot.
  *
- * Note: Caller must be holding the lock
+ * Note: Caller must be holding the lock.
  */
 static int
 findFreeTargetSlot(void)
@@ -615,6 +621,25 @@ findFreeTargetSlot(void)
 				 MyBackendId);
 			return i;
 		}
+	}
+	return -1;
+}
+
+
+/*
+ * Find target slot belonging to given backend.
+ *
+ * Note: Caller must be holding the lock.
+ */
+static int
+findTargetSlot(BackendId backendid)
+{
+	int		i;
+
+	for (i = 0; i < NumTargetSlots; i++)
+	{
+		if (dbgcomm_slots[i].backendid == backendid)
+			return i;
 	}
 	return -1;
 }
