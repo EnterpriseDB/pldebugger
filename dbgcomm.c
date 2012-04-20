@@ -59,6 +59,7 @@
 
 typedef struct
 {
+	BackendId		backendid;
 	int			status;
 	int			pid;
 	int			port;
@@ -66,12 +67,18 @@ typedef struct
 
 static dbgcomm_target_slot_t *dbgcomm_slots = NULL;
 
+/*
+ * Each in-progress connection attempt between proxy and target require
+ * a slot. 50 should be plenty.
+ */
+#define NumTargetSlots 50
 
 /**********************************************************************
  * Prototypes for static functions
  **********************************************************************/
 static void dbgcomm_init(void);
 static uint32 resolveHostName(const char *hostName);
+static int findFreeTargetSlot(void);
 
 /**********************************************************************
  * Initialization routines
@@ -84,7 +91,7 @@ static uint32 resolveHostName(const char *hostName);
 void
 dbgcomm_reserve(void)
 {
-	RequestAddinShmemSpace(sizeof(dbgcomm_target_slot_t) * MaxBackends);
+	RequestAddinShmemSpace(sizeof(dbgcomm_target_slot_t) * NumTargetSlots);
 }
 
 /*
@@ -99,15 +106,18 @@ dbgcomm_init(void)
 		return;
 
 	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-	dbgcomm_slots = ShmemInitStruct("Debugger Connection slots", sizeof(dbgcomm_target_slot_t) * MaxBackends, &found);
+	dbgcomm_slots = ShmemInitStruct("Debugger Connection slots", sizeof(dbgcomm_target_slot_t) * NumTargetSlots, &found);
 	if (dbgcomm_slots == NULL)
 		elog(ERROR, "out of shared memory");
 
 	if (!found)
 	{
 		int i;
-		for (i = 0; i < MaxBackends; i++)
+		for (i = 0; i < NumTargetSlots; i++)
+		{
+			dbgcomm_slots[i].backendid = InvalidBackendId;
 			dbgcomm_slots[i].status = DBGCOMM_IDLE;
+		}
 	}
 	LWLockRelease(getPLDebuggerLock());
 }
@@ -139,11 +149,9 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	struct sockaddr_in   localaddr = {0};
 	socklen_t	addrlen 	= sizeof( remoteaddr );
 	int			reuse_addr_flag = 1;
+	int			slot;
 
 	dbgcomm_init();
-
-	if (MyBackendId < 0 || MyBackendId >= MaxBackends)
-		elog(ERROR, "invalid backend id"); /* shouldn't happen */
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
@@ -151,6 +159,14 @@ dbgcomm_connect_to_proxy(int proxyPort)
 		ereport(COMMERROR,
 				(errcode_for_socket_access(),
 				 errmsg("could not create socket for connecting to proxy: %m")));
+		return -1;
+	}
+	/* Sockets seem to be non-blocking by default on Windows.. */
+	if (!pg_set_block(sockfd))
+	{
+		closesocket(sockfd);
+		ereport(COMMERROR,
+			(errmsg("could not set socket to blocking mode: %m")));
 		return -1;
 	}
 
@@ -177,9 +193,20 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	getsockname(sockfd, (struct sockaddr *) &localaddr, &addrlen);
 
 	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-	dbgcomm_slots[MyBackendId].port = ntohs(localaddr.sin_port);
-	dbgcomm_slots[MyBackendId].status = DBGCOMM_CONNECTING_TO_PROXY;
-	dbgcomm_slots[MyBackendId].pid = MyProcPid;
+	slot = findFreeTargetSlot();
+	if (slot < 0)
+	{
+		closesocket(sockfd);
+		LWLockRelease(getPLDebuggerLock());
+		ereport(COMMERROR,
+				(errcode_for_socket_access(),
+				 errmsg("could not find a free target slot")));
+		return -1;
+	}
+	dbgcomm_slots[slot].port = ntohs(localaddr.sin_port);
+	dbgcomm_slots[slot].status = DBGCOMM_CONNECTING_TO_PROXY;
+	dbgcomm_slots[slot].backendid = MyBackendId;
+	dbgcomm_slots[slot].pid = MyProcPid;
 	LWLockRelease(getPLDebuggerLock());
 
 	remoteaddr.sin_family 	   = AF_INET;
@@ -198,8 +225,9 @@ dbgcomm_connect_to_proxy(int proxyPort)
 		 * the proxy.
 		 */
 		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-		dbgcomm_slots[MyBackendId].port = 0;
-		dbgcomm_slots[MyBackendId].status = DBGCOMM_IDLE;
+		dbgcomm_slots[slot].status = DBGCOMM_IDLE;
+		dbgcomm_slots[slot].backendid = InvalidBackendId;
+		dbgcomm_slots[slot].port = 0;
 		LWLockRelease(getPLDebuggerLock());
 		return -1;
 	}
@@ -222,11 +250,9 @@ dbgcomm_listen_for_proxy(void)
 	int			serverSocket;
 	int			localport;
 	bool		done;
+	int			slot;
 
 	dbgcomm_init();
-
-	if (MyBackendId < 0 || MyBackendId >= MaxBackends)
-		elog(ERROR, "invalid backend id"); /* shouldn't happen */
 
 	sockfd = socket( AF_INET, SOCK_STREAM, 0 );
 	if (sockfd < 0)
@@ -234,6 +260,14 @@ dbgcomm_listen_for_proxy(void)
 		ereport(COMMERROR,
 				(errcode_for_socket_access(),
 				 errmsg("could not create socket for connecting to proxy: %m")));
+		return -1;
+	}
+	/* Sockets seem to be non-blocking by default on Windows.. */
+	if (!pg_set_block(sockfd))
+	{
+		closesocket(sockfd);
+		ereport(COMMERROR,
+			(errmsg("could not set socket to blocking mode: %m")));
 		return -1;
 	}
 
@@ -260,9 +294,20 @@ dbgcomm_listen_for_proxy(void)
 	}
 
 	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-	dbgcomm_slots[MyBackendId].port = localport;
-	dbgcomm_slots[MyBackendId].status = DBGCOMM_LISTENING_FOR_PROXY;
-	dbgcomm_slots[MyBackendId].pid = MyProcPid;
+	slot = findFreeTargetSlot();
+	if (slot < 0)
+	{
+		closesocket(sockfd);
+		LWLockRelease(getPLDebuggerLock());
+		ereport(COMMERROR,
+				(errcode_for_socket_access(),
+				 errmsg("could not find a free target slot")));
+		return -1;
+	}
+	dbgcomm_slots[slot].port = localport;
+	dbgcomm_slots[slot].status = DBGCOMM_LISTENING_FOR_PROXY;
+	dbgcomm_slots[slot].pid = MyBackendId;
+	dbgcomm_slots[slot].pid = MyProcPid;
 	LWLockRelease(getPLDebuggerLock());
 
 	/* Notify the client application that this backend is waiting for a proxy. */
@@ -282,18 +327,19 @@ dbgcomm_listen_for_proxy(void)
 		 * end's port number matches what's posted in the shared memory slot.
 		 */
 		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-		if (dbgcomm_slots[MyBackendId].status == DBGCOMM_PROXY_CONNECTING &&
-			dbgcomm_slots[MyBackendId].port == ntohs(remoteaddr.sin_port))
+		if (dbgcomm_slots[slot].status == DBGCOMM_PROXY_CONNECTING &&
+			dbgcomm_slots[slot].port == ntohs(remoteaddr.sin_port))
 		{
-			dbgcomm_slots[MyBackendId].status = DBGCOMM_IDLE;
+			dbgcomm_slots[slot].backendid = InvalidBackendId;
+			dbgcomm_slots[slot].status = DBGCOMM_IDLE;
 			done = true;
 		}
 		else
-			close(serverSocket);
+			closesocket(serverSocket);
 		LWLockRelease(getPLDebuggerLock());
 	}
 
-	close(sockfd);
+	closesocket(sockfd);
 
 	return serverSocket;
 }
@@ -321,14 +367,19 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 
 	dbgcomm_init();
 
-	if (targetBackend < 0 || targetBackend >= MaxBackends)
-		elog(ERROR, "invalid backend id"); /* shouldn't happen */
-
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
 		ereport(ERROR,
 				(errcode_for_socket_access(),
 				 errmsg("could not create socket for connecting to target: %m")));
+	/* Sockets seem to be non-blocking by default on Windows.. */
+	if (!pg_set_block(sockfd))
+	{
+		closesocket(sockfd);
+		ereport(COMMERROR,
+			(errmsg("could not set socket to blocking mode: %m")));
+		return -1;
+	}
 
 	/*
 	 * We have to bind the socket before connecting, so that we know the
@@ -356,7 +407,7 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 	if (dbgcomm_slots[targetBackend].status != DBGCOMM_LISTENING_FOR_PROXY)
 	{
-		close(sockfd);
+		closesocket(sockfd);
 		ereport(ERROR,
 				(errmsg("target backend is not listening for a connection")));
 	}
@@ -409,7 +460,7 @@ dbgcomm_accept_target(int sockfd, int *targetPid)
 		 * end's port number is listed in a slot in shared memory.
 		 */
 		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
-		for (i = 0; i < MaxBackends; i++)
+		for (i = 0; i < NumTargetSlots; i++)
 		{
 			if (dbgcomm_slots[i].status == DBGCOMM_CONNECTING_TO_PROXY &&
 				dbgcomm_slots[i].port == ntohs(remoteaddr.sin_port))
@@ -420,13 +471,13 @@ dbgcomm_accept_target(int sockfd, int *targetPid)
 			}
 		}
 		LWLockRelease(getPLDebuggerLock());
-		if (i >= MaxBackends)
+		if (i >= NumTargetSlots)
 		{
 			/*
 			 * This connection did not come from a backend. Reject and continue
 			 * listening.
 			 */
-			close(serverSocket);
+			closesocket(serverSocket);
 			continue;
 		}
 		else
@@ -447,17 +498,21 @@ dbgcomm_listen_for_target(int *port)
 	struct sockaddr_in 			proxy_addr     	= {0};
 	socklen_t					proxy_addr_len 	= sizeof( proxy_addr );
 	int							reuse_addr_flag = 1;
-#ifdef WIN32
-	WORD 		                wVersionRequested;
-	WSADATA 	                wsaData;
-	u_long                      blockingMode = 0;
-#endif
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
 		ereport(ERROR,
 				(errcode_for_socket_access(),
 				 errmsg("could not create socket: %m")));
+	/* Sockets seem to be non-blocking by default on Windows.. */
+	if (!pg_set_block(sockfd))
+	{
+		int save_errno = errno;
+		closesocket(sockfd);
+		errno = save_errno;
+		ereport(ERROR,
+				(errmsg("could not set socket to blocking mode: %m")));
+	}
 
 	/* Ask the TCP/IP stack for an unused port */
 	proxy_addr.sin_family      = AF_INET;
@@ -469,8 +524,13 @@ dbgcomm_listen_for_target(int *port)
 
 	/* Bind a listener socket to that port */
 	if (bind( sockfd, (struct sockaddr *) &proxy_addr, sizeof( proxy_addr )) < 0 )
+	{
+		int save_errno = errno;
+		closesocket(sockfd);
+		errno = save_errno;
 		ereport(ERROR,
 				(errmsg("could not create listener for debugger connection")));
+	}
 
 	/* Get the port number selected by the TCP/IP stack */
 	getsockname( sockfd, (struct sockaddr *)&proxy_addr, &proxy_addr_len );
@@ -485,6 +545,33 @@ dbgcomm_listen_for_target(int *port)
 	return sockfd;
 }
 
+/*
+ * Find first available target slot.
+ *
+ * Note: Caller must be holding the lock
+ */
+static int
+findFreeTargetSlot(void)
+{
+	int		i;
+
+	for (i = 0; i < NumTargetSlots; i++)
+	{
+		if (dbgcomm_slots[i].backendid == InvalidBackendId)
+			return i;
+		if (dbgcomm_slots[i].backendid == MyBackendId)
+		{
+			/*
+			 * If we've failed to deallocate our slot earlier, reuse this slot.
+			 * This shouldn't happen.
+			 */
+			elog(LOG, "found leftover debugging target slot for backend %d",
+				 MyBackendId);
+			return i;
+		}
+	}
+	return -1;
+}
 
 
 /*******************************************************************************
@@ -515,4 +602,3 @@ static uint32 resolveHostName( const char * hostName )
 	else
 		return( hostAddress );
 }
-

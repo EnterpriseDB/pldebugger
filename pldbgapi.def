@@ -1,24 +1,4 @@
 EXPORTS
-  pg_finfo_pldbg_abort_target
-  pg_finfo_pldbg_attach_to_port
-  pg_finfo_pldbg_continue
-  pg_finfo_pldbg_create_listener
-  pg_finfo_pldbg_deposit_value
-  pg_finfo_pldbg_drop_breakpoint
-  pg_finfo_pldbg_get_breakpoints
-  pg_finfo_pldbg_get_pkg_cons
-  pg_finfo_pldbg_get_proxy_info
-  pg_finfo_pldbg_get_source
-  pg_finfo_pldbg_get_stack
-  pg_finfo_pldbg_get_variables
-  pg_finfo_pldbg_select_frame
-  pg_finfo_pldbg_set_breakpoint
-  pg_finfo_pldbg_set_global_breakpoint
-  pg_finfo_pldbg_step_into
-  pg_finfo_pldbg_step_over
-  pg_finfo_pldbg_wait_for_breakpoint
-  pg_finfo_pldbg_wait_for_target
-  Pg_magic_func
   pldbg_abort_target
   pldbg_attach_to_port
   pldbg_continue
@@ -37,4 +17,3 @@ EXPORTS
   pldbg_step_over
   pldbg_wait_for_breakpoint
   pldbg_wait_for_target
-  

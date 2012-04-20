@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
 
-    <Target Name="all" DependsOnTargets="targetinfo;plugin_debugger;pldbgapi" />
+    <Target Name="all" DependsOnTargets="plugin_debugger;pldbgapi" />
 
     <Import Project="settings.projinc" />
 
@@ -53,24 +53,13 @@
         <ClCommand Include="/I$(OPENSSLPATH)\include" />
         <ClCommand Include="/I$(KERBEROSPATH)\inc\krb5" />
     </ItemGroup>
-
-    <!-- TARGETINFO -->
-    
-    <ItemGroup>
-        <TargetInfoSrc Include="targetinfo.c" />
-    </ItemGroup>
-
-    <Target Name="targetinfo" Inputs="@(TargetInfoSrc)" Outputs="targetinfo.dll">
-        <Message Text="Building targetinfo.dll" />
-        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
-        <WriteLinesToFile File="flist" Lines="@(TargetInfoSrc)" Overwrite="false" />
-        <Exec Command="cl $(CFLAGS) @flist /link /def:targetinfo.def $(LDFLAGS)" />
-    </Target>
     
     <!-- PLUGIN_DEBUGGER -->
     
     <ItemGroup>
         <PluginDebuggerSrc Include="plugin_debugger.c" />
+        <PluginDebuggerSrc Include="plpgsql_debugger.c" />
+        <PluginDebuggerSrc Include="dbgcomm.c" />
     </ItemGroup>
 
     <Target Name="plugin_debugger" Inputs="@(PluginDebuggerSrc)" Outputs="plugin_debugger.dll">
@@ -95,10 +84,10 @@
     
     
     <Target Name="clean">
-        <Delete Files="targetinfo.dll;plugin_debugger.dll;pldbgapi.dll" />
-        <Delete Files="targetinfo.exp;plugin_debugger.exp;pldbgapi.exp" />
-        <Delete Files="targetinfo.lib;plugin_debugger.lib;pldbgapi.lib" />
-        <Delete Files="targetinfo.dll.manifest;plugin_debugger.dll.manifest;pldbgapi.dll.manifest" />
+        <Delete Files="plugin_debugger.dll;pldbgapi.dll" />
+        <Delete Files="plugin_debugger.exp;pldbgapi.exp" />
+        <Delete Files="plugin_debugger.lib;pldbgapi.lib" />
+        <Delete Files="plugin_debugger.dll.manifest;pldbgapi.dll.manifest" />
         <Delete Files="flist" />
     </Target>
 

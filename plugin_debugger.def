@@ -10,8 +10,8 @@ EXPORTS
   BreakpointOnId
   BreakpointReleaseList
   BreakpointShowAll
-  pg_finfo_plpgsql_oid_debug
-  _PG_fini
+  dbgcomm_connect_to_target
+  dbgcomm_listen_for_target
+  dbgcomm_accept_target
   _PG_init
-  Pg_magic_func
-  plpgsql_oid_debug
+  pldbg_oid_debug
