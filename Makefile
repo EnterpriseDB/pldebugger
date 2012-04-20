@@ -31,7 +31,7 @@ PLUGIN_big = plugin_debugger
 
 # OBJS lists the .o files comprising plugin_debugger.so. pldbgapi.so is
 # implicitly built from pldbgapi.c file.
-OBJS	   = plpgsql_debugger.o plugin_debugger.o
+OBJS	   = plpgsql_debugger.o plugin_debugger.o dbgcomm.o
 ifdef INCLUDE_PACKAGE_SUPPORT
 OBJS += spl_debugger.o
 endif

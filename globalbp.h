@@ -26,10 +26,10 @@ typedef enum
  */
 typedef struct BreakpointData
 {
-	bool			isTmp;							/* tmp breakpoints are removed whenever they are hit		*/
-	bool			busy;							/* is this session already in use by a target?				*/
-	int				proxyPort;						/* port number of the proxy listener 						*/
-	int				proxyPid;						/* pid of the proxy process 								*/
+	bool		isTmp;		/* tmp breakpoints are removed when hit */
+	bool		busy;		/* is this session already in use by a target? */
+	int			proxyPort;	/* port number of the proxy listener */
+	int			proxyPid;	/* process id of the proxy process */
 } BreakpointData;
 
 /* 

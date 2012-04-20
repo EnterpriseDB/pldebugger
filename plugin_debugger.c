@@ -41,6 +41,7 @@
 #include "miscadmin.h"
 
 #include "pldebugger.h"
+#include "dbgcomm.h"
 
 /*
  * Let the PG module loader know that we are compiled against
@@ -114,10 +115,6 @@ void _PG_init( void );				/* initialize this module when we are dynamically load
  **********************************************************************/
 
 //static char       ** fetchArgNames( PLpgSQL_function * func, int * nameCount );
-static uint32 		 resolveHostName( const char * hostName );
-static bool 		 getBool( int channel );
-static char        * getNString( int channel );
-static void 		 sendString( int channel, char * src );
 static void        * writen( int peer, void * src, size_t len );
 static bool 		 connectAsServer( void );
 static bool 		 connectAsClient( Breakpoint * breakpoint );
@@ -147,6 +144,7 @@ void _PG_init( void )
 		debugger_languages[i]->initialize();
 
 	reserveBreakpoints();
+	dbgcomm_reserve();
 }
 
 /*
@@ -298,107 +296,6 @@ static void sendUInt32( int channel, uint32 val )
 	uint32	netVal = htonl( val );
 
 	writen( channel, &netVal, sizeof( netVal ));
-}
-
-/*******************************************************************************
- * getBool()
- *
- *	getBool() retreives a boolean value (TRUE or FALSE) from the server.  We
- *  call this function after we ask the server to do something that returns a
- *  boolean result (like deleting a breakpoint or depositing a new value).
- */
-
-static bool getBool( int channel )
-{
-	char * str;
-	bool   result;
-
-	str = getNString( channel );
-
-	if( str[0] == 't' )
-		result = TRUE;
-	else
-		result = FALSE;
-
-	pfree( str );
-
-	return( result );
-}
-
-/*******************************************************************************
- * sendString()
- *
- *	This function sends a string value (src) to the debugger server.  'src' 
- *	should point to a null-termianted string.  We send the length of the string 
- *	(as a 32-bit unsigned integer), then the bytes that make up the string - we
- *	don't send the null-terminator.
- */
-
-static void sendString( int channel, char * src )
-{
-	size_t	len = strlen( src );
-
-	sendUInt32( channel, len );
-	writen( channel, src, len );
-}
-
-/******************************************************************************
- * getNstring()
- *
- *	This function is the opposite of sendString() - it reads a string from the 
- *	debugger server.  The server sends the length of the string and then the
- *	bytes that make up the string (minus the null-terminator).  We palloc() 
- *	enough space to hold the entire string (including the null-terminator) and
- *	return a pointer to that space (after, of course, reading the string from
- *	the server and tacking on the null-terminator).
- */
-
-static char * getNString( int channel )
-{
-	uint32 len = readUInt32( channel );
-
-	if( len == 0 )
-		return( NULL );
-	else
-	{
-		char * result = palloc( len + 1 );
-
-		readn( channel, result, len );
-
-		result[len] = '\0';
-
-		return( result );
-	}
-}
-
-
-/*******************************************************************************
- * resolveHostName()
- *
- *	Given the name of a host (hostName), this function returns the IP address
- *	of that host (or 0 if the name does not resolve to an address).
- *
- *	FIXME: this function should probably be a bit more flexibile.
- */
-
-#ifndef INADDR_NONE
-#define INADDR_NONE ((unsigned long int) -1)    /* For Solaris */
-#endif
-
-static uint32 resolveHostName( const char * hostName )
-{
-    struct hostent * hostDesc;
-    uint32           hostAddress;
-
-    if(( hostDesc = gethostbyname( hostName )))
-		hostAddress = ((struct in_addr *)hostDesc->h_addr )->s_addr;
-    else
-		hostAddress = inet_addr( hostName );
-
-    if(( hostAddress == -1 ) || ( hostAddress == INADDR_NONE ))
-		return( 0 );
-	else
-		return( hostAddress );
 }
 
 /*
@@ -633,142 +530,18 @@ bool attach_to_proxy( Breakpoint * breakpoint )
 
 static bool connectAsServer( void )
 {
-	int	 				sockfd       = socket( AF_INET, SOCK_STREAM, 0 );
-	struct sockaddr_in 	srv_addr     = {0};
-	struct sockaddr_in  cli_addr     = {0};
-	socklen_t			srv_addr_len = sizeof( srv_addr );
-	socklen_t			cli_addr_len = sizeof(cli_addr);
-	int	 				client_sock;
-	int					reuse_addr_flag = 1;
-#ifdef WIN32
-	WORD                wVersionRequested;
-	WSADATA             wsaData;
-	int                 err;
-	u_long              blockingMode = 0;
-#endif
+	int			client_sock;
 
-	/* Ask the TCP/IP stack for an unused port */
-	srv_addr.sin_family      = AF_INET;
-	srv_addr.sin_port        = htons( 0 );
-	srv_addr.sin_addr.s_addr = htonl( INADDR_ANY );
-
-#ifdef WIN32
-
-	wVersionRequested = MAKEWORD( 2, 2 );
- 
-	err = WSAStartup( wVersionRequested, &wsaData );
-	if ( err != 0 )
+	client_sock = dbgcomm_listen_for_proxy();
+	if (client_sock < 0)
 	{
-		/* Tell the user that we could not find a usable 
-		 * WinSock DLL.                                  
-		 */
-		return 0;
+		per_session_ctx.client_w = per_session_ctx.client_r = 0;
+	    return( FALSE );
 	}
-
-	/* Confirm that the WinSock DLL supports 2.2.
-	 * Note that if the DLL supports versions greater
-	 * than 2.2 in addition to 2.2, it will still return
-	 * 2.2 in wVersion since that is the version we
-	 * requested.
-	 */
-
-	if ( LOBYTE( wsaData.wVersion ) != 2 ||HIBYTE( wsaData.wVersion ) != 2 )
+	else
 	{
-		/* Tell the user that we could not find a usable
-		 * WinSock DLL.
-		 */
-		WSACleanup( );
-		return 0;
-	}
-#endif
-
-	setsockopt( sockfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse_addr_flag, sizeof( reuse_addr_flag ));
-
-	/* Bind a listener socket to that port */
-	if( bind( sockfd, (struct sockaddr *)&srv_addr, sizeof( srv_addr )) < 0 )
-	{
-		elog( COMMERROR, "pl_debugger - can't bind server port, errno %d", errno );
-		return( FALSE );
-	}
-
-	/* Get the port number selected by the TCP/IP stack */
-	getsockname( sockfd, (struct sockaddr *)&srv_addr, &srv_addr_len );
-
-	/* Get ready to wait for a client */
-	listen( sockfd, 2 );
-		
-#ifdef WIN32
-	ioctlsocket( sockfd, FIONBIO,  &blockingMode );
-#endif
-
-	/* Notify the client application that a debugger is waiting on this port. */
-	elog( NOTICE, "PLDBGBREAK:%d", ntohs( srv_addr.sin_port ));
-
-	while( TRUE )
-	{
-		uint32	proxyPID;
-		PGPROC *proxyOff;
-		PGPROC *proxyProc;
-		char   *proxyProtoVersion;
-			
-		/* and wait for the debugger client to attach to us */
-		if(( client_sock = accept( sockfd, (struct sockaddr *)&cli_addr, &cli_addr_len )) < 0 )
-		{
-			per_session_ctx.client_w = per_session_ctx.client_r = 0;
-			per_session_ctx.client_port = 0;
-			return( FALSE );
-		}
-		else
-		{
-#ifdef WIN32
-			u_long blockingMode1 = 0;
-
-			ioctlsocket( client_sock, FIONBIO,  &blockingMode1 );
-#endif
-			
-			per_session_ctx.client_w = client_sock;
-			per_session_ctx.client_r = client_sock;
-			per_session_ctx.client_port = 0;
-		}
-
-		/* Now authenticate the proxy */
-		proxyPID = readUInt32( client_sock );
-		readn( client_sock, &proxyOff, sizeof( proxyOff ));
-		proxyProc = BackendPidGetProc(proxyPID);
-		
-		if (proxyProc == NULL || proxyProc != proxyOff)
-		{
-			/* This doesn't look like a valid proxy - he didn't send us the right info */
-			ereport(LOG, (ERRCODE_CONNECTION_FAILURE, 
-						  errmsg( "invalid debugger connection credentials")));
-			dbg_send( "%s", "f" );
-#ifdef WIN32
-			closesocket( client_sock );
-#else
-			close( client_sock );
-#endif
-			per_session_ctx.client_w = per_session_ctx.client_r = 0;
-			per_session_ctx.client_port = 0;
-			continue;
-		}
-
-			
-		/* 
-		 * This looks like a valid proxy, let's use this connection
-		 *
-		 * FIXME: we may want to ensure that proxyProc->roleId corresponds
-		 *		  to a superuser too
-		 */
-		dbg_send( "%s", "t" );
-		
-		/*
-		 * The proxy now sends it's protocol version and we
-		 * reply with ours
-		 */
-		proxyProtoVersion = dbg_read_str();
-		pfree(proxyProtoVersion);
-		dbg_send( "%s", TARGET_PROTO_VERSION );
-		
+		per_session_ctx.client_w = client_sock;
+		per_session_ctx.client_r = client_sock;
 		return( TRUE );
 	}
 }
@@ -786,53 +559,22 @@ static bool connectAsServer( void )
 static bool connectAsClient( Breakpoint * breakpoint )
 {
 	int					 proxySocket;
-	struct 	sockaddr_in  proxyAddress = {0};
-	char               * proxyProtoVersion;
 
-	if(( proxySocket = socket( AF_INET, SOCK_STREAM, 0 )) < 0 )
+	proxySocket = dbgcomm_connect_to_proxy(breakpoint->data.proxyPort);
+
+	if (proxySocket < 0 )
 	{
-		ereport( COMMERROR, (errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "debugger server can't create socket, errno %d", errno )));
-		return( FALSE );
+		/* dbgcomm_connect_to_proxy already logged the reason */
+		return false;
 	}
-
-	proxyAddress.sin_family 	  = AF_INET;
-	proxyAddress.sin_addr.s_addr = resolveHostName( "127.0.0.1" );
-	proxyAddress.sin_port        = htons( breakpoint->data.proxyPort );
-	
-	if( connect( proxySocket, (struct sockaddr *)&proxyAddress, sizeof( proxyAddress )) < 0 )
+	else
 	{
-		ereport( DEBUG1, (errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "debugger could not connect to debug proxy" )));
-		return( FALSE );
+		per_session_ctx.client_w = proxySocket;
+		per_session_ctx.client_r = proxySocket;
+
+		BreakpointBusySession( breakpoint->data.proxyPid );
+		return true;
 	}
-
-	sendUInt32( proxySocket, MyProc->pid );
-	writen( proxySocket, &MyProc, sizeof( MyProc ));
-
-	if( !getBool( proxySocket ))
-	{
-		ereport( COMMERROR, (errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "debugger proxy refused authentication" )));
-	}
-
-	/*
-	 * Now exchange version information with the target - for now,
-	 * we don't actually do anything with the version information,
-	 * but as soon as we make a change to the protocol, we'll need
-	 * to know the right patois.
-	 */
-
-	sendString( proxySocket, TARGET_PROTO_VERSION );
-
-	proxyProtoVersion = getNString( proxySocket );
-	
-	pfree( proxyProtoVersion );
-
-	per_session_ctx.client_w = proxySocket;
-	per_session_ctx.client_r = proxySocket;
-	per_session_ctx.client_port = breakpoint->data.proxyPort;
-
-	BreakpointBusySession( breakpoint->data.proxyPid );
-
-	return( TRUE );
 }
 
 /*

@@ -1,10 +1,5 @@
 #ifndef PLDEBUGGER_H
 #define PLDEBUGGER_H
-typedef struct
-{
-	
-
-} debugger_frame;
 
 /* 
  * We keep one per_session_ctx structure per backend. This structure holds all
@@ -15,7 +10,6 @@ typedef struct
 	bool	 step_into_next_func;	/* Should we step into the next function?				 */
 	int		 client_r;				/* Read stream connected to client						 */
 	int		 client_w;				/* Write stream connected to client						 */
-	int		 client_port;			/* TCP Port that we are connected to 					 */
 } per_session_ctx_t;
 
 extern per_session_ctx_t per_session_ctx;

@@ -110,6 +110,7 @@
 #include <arpa/inet.h>
 
 #include "globalbp.h"
+#include "dbgcomm.h"
 
 /*
  * Let the PG module loader know that we are compiled against
@@ -254,14 +255,11 @@ static void 		   * writen( int serverHandle, void * dst, size_t len );
 static void   		  	 sendBytes( debugSession * session, void * src, size_t len );
 static void   		  	 sendUInt32( debugSession * session, uint32 val );
 static void   		  	 sendString( debugSession * session, char * src );
-static void   		  	*getAddress( debugSession * session );
 static bool   		  	 getBool( debugSession * session );
 static uint32 		  	 getUInt32( debugSession * session );
 static char 		   * getNString( debugSession * session );
 static void 		  	 initializeModule( void );
 static void 		  	 cleanupAtExit( int code, Datum arg );
-static uint32 		  	 resolveHostName( const char * hostName );
-static int 			     allocateServerListener( int * port );
 static void 			 initSessionHash();
 static debugSession    * defaultSession( sessionHandle handle );
 static sessionHandle     addSession( debugSession * session );
@@ -276,7 +274,7 @@ static TupleDesc	  	 getResultTupleDesc( FunctionCallInfo fcinfo );
 /*******************************************************************************
  * pldbg_attach_to_port( portNumber INTEGER ) RETURNS INTEGER
  *
- *	This function attaches to a debugger server listening on the given port. A
+ *	This function attaches to a debugging target listening on the given port. A
  *  debugger client should invoke this function in response to a PLDBGBREAK 
  *  NOTICE (the notice contains the port number that you should connect to).
  *
@@ -291,72 +289,20 @@ static TupleDesc	  	 getResultTupleDesc( FunctionCallInfo fcinfo );
 
 Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 {
-	debugSession       * session;
-	struct sockaddr_in   serverAddress = {0};
-	char			   * targetProtoVersion;
+	int32		targetBackend = PG_GETARG_INT32( 0 );
+	debugSession *session;
 
 	initializeModule();
 
-	session = MemoryContextAlloc( TopMemoryContext, sizeof( *session ));
-	session->serverPort = PG_GETARG_UINT32( 0 );
+	session = MemoryContextAllocZero( TopMemoryContext, sizeof( *session ));
 	session->listener   = -1;
 
-	if ((session->serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	session->serverSocket = dbgcomm_connect_to_target(targetBackend);
+
+	if (session->serverSocket < 0)
 		ereport(ERROR,
 				(errcode_for_socket_access(),
-				 errmsg("could not create socket for debugger connection")));
-
-	serverAddress.sin_family 	  = AF_INET;
-	serverAddress.sin_addr.s_addr = resolveHostName( "127.0.0.1" );
-	serverAddress.sin_port        = htons( session->serverPort );
-
-	if (connect(session->serverSocket,
-				(struct sockaddr *) &serverAddress,
-				sizeof(serverAddress)) < 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_CONNECTION_FAILURE),
 				 errmsg("could not connect to debug target")));
-
-	/*
-	 * To convince the debugger server that we are a valid proxy (as opposed
-	 * to some nefarious hacker that just happens to wander across the server's
-	 * open port) we send some information that only a valid proxy is likely
-	 * to know.
-	 *
-	 * NOTE: this is not foolproof - it's still possible to fool the debugger
-	 * server, but you have to be located behind the firewall in order to do
-	 * that, you have to know what the debugger server is expecting, and you
-	 * have to know the offset of your own PGPROC entry.  If you have all of
-	 * that information, you can do anything you want anyway.
-	 *
-	 * We send our own process ID and the offset of our PGPROC array entry.
-	 * The debugger server can use that offset to verify that our process ID
-	 * is correct and can also verify that we are in fact a superuser
-	 */
-
-	sendUInt32( session, MyProc->pid );
-
-	sendBytes( session, &MyProc, sizeof(MyProc));
-
-	if( !getBool( session ))
-		ereport(ERROR,
-				(errcode(ERRCODE_CONNECTION_FAILURE),
-				 errmsg("debugger server refused authentication")));
-
-	/*
-	 * Now exchange version information with the target - for now,
-	 * we don't actually do anything with the version information,
-	 * but as soon as we make a change to the protocol, we'll need
-	 * to know the right patois.
-	 */
-
-	sendString( session, PROXY_PROTO_VERSION );
-
-	targetProtoVersion = getNString( session );
-
-	if( targetProtoVersion )
-		pfree( targetProtoVersion );
-
 
 	/*
 	 * After the handshake, the target process will send us information about
@@ -378,11 +324,11 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 Datum pldbg_create_listener( PG_FUNCTION_ARGS ) 
 {
-	debugSession * session = MemoryContextAlloc( TopMemoryContext, sizeof( *session ));
+	debugSession * session = MemoryContextAllocZero( TopMemoryContext, sizeof( *session ));
 
 	initializeModule();
 
-	session->listener     = allocateServerListener( &session->serverPort );
+	session->listener = dbgcomm_listen_for_target(&session->serverPort);
 	session->serverSocket = -1;
 
 	mostRecentSession = session;
@@ -407,113 +353,32 @@ Datum pldbg_create_listener( PG_FUNCTION_ARGS )
 
 Datum pldbg_wait_for_target( PG_FUNCTION_ARGS )
 {
-	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
+	debugSession *session = defaultSession(PG_GETARG_SESSION( 0 ));
+	int			serverSocket;
+	int			serverPID;
 
-	while( TRUE )
-	{
-		uint32				serverPID;
-		PGPROC			   *serverOff;
-		PGPROC			   *serverProc;
-		char			   *serverProtoVersion;
-		struct sockaddr_in	serverAddr    = {0};
-		socklen_t			serverAddrLen = sizeof(serverAddr);
-		int					serverSocket;	
-		fd_set				rmask;
-		struct timeval 		timeout;
+	/*
+	 * Now mark all of our global breakpoints as 'available' (that is, not
+	 * busy)
+	 */
+	BreakpointFreeSession( MyProc->pid );
 
-		FD_ZERO( &rmask );
-		FD_SET( session->listener, &rmask );
-		FD_SET( MyProcPort->sock, &rmask );
+	serverSocket = dbgcomm_accept_target(session->listener, &serverPID);
+	if (serverSocket < 0)
+		ereport(ERROR,
+				(errmsg("could not accept a connection from debugging target")));
 
-		timeout.tv_sec  = 30;	/* Wait no longer than 30 seconds */
-		timeout.tv_usec = 0;
+	session->serverSocket = serverSocket;
 
-		/*
-		 * Now mark all of our global breakpoints as 'available' (that is, not
-		 * busy)
-		 */
-		BreakpointFreeSession( MyProc->pid );
+	/*
+	 * After the handshake, the target process will send us information about
+	 * the local breakpoint that it hit. Read it. We will hand it to the client
+	 * if it calls wait_for_breakpoint().
+	 */
+	session->breakpointString = MemoryContextStrdup(TopMemoryContext,
+													getNString(session));
 
-		switch( select(( session->listener > MyProcPort->sock ? session->listener: MyProcPort->sock ) + 1, &rmask, NULL, NULL, NULL ))
-		{
-			case -1:
-			{
-				ereport( ERROR, ( ERRCODE_CONNECTION_FAILURE, errmsg( "select() failed waiting for target" )));
-				break;
-			}
-
-			case 0:
-			{
-				/* Timer expired */
-				PG_RETURN_NULL();
-				break;
-			}
-
-			default:
-			{
-				/*
-				 * We got traffic on one of the two sockets.  If we see traffic from the 
-				 * client (libpq) connection, just return to the caller so that libpq can
-				 * process whatever's waiting.  Presumably, the only time we'll see any
-				 * libpq traffic here is when the client process has killed itself...
-				 */
-
-				if( FD_ISSET( MyProcPort->sock, &rmask ))
-					PG_RETURN_NULL();
-				break;
-			}
-		}
-
-		/* and wait for the debugger server to attach to us */
-		if(( serverSocket = accept( session->listener, (struct sockaddr *)&serverAddr, &serverAddrLen )) < 0 )
-		{
-			ereport( ERROR, ( ERRCODE_CONNECTION_FAILURE, errmsg( "could not create socket for debugger connection" )));
-		}
-
-		session->serverSocket = serverSocket;
-		
-		/* Now authenticate the server */
-		serverPID = getUInt32( session );
-		serverOff = getAddress( session );
-		serverProc = BackendPidGetProc(serverPID);
-		
-		if (serverProc == NULL || serverProc != serverOff)
-		{
-			/*
-			 * This doesn't look like a valid server - he didn't send us the
-			 * right info
-			 */
-			ereport(LOG,
-					(ERRCODE_CONNECTION_FAILURE, 
-					 errmsg( "invalid debugger connection credentials")));
-			sendString( session, "f" );
-#ifdef WIN32
-			closesocket( session->serverSocket );
-#else
-			close( session->serverSocket );
-#endif
-			session->serverSocket = -1;
-			PG_RETURN_NULL();
-		}
-
-		/*
-		 * FIXME: this function should return a tuple that contains information
-		 * about the target we just nabbed - the process ID, user name, ...
-		 */
-
-		sendString( session, "t" );
-
-		/*
-		 * The server now sends it's protocol version and we
-		 * reply with ours
-		 */
-		serverProtoVersion = getNString( session );
-		sendString( session, PROXY_PROTO_VERSION );
-
-		mostRecentSession = session;
-
-		PG_RETURN_UINT32( serverPID );
-	}
+	PG_RETURN_UINT32( serverPID );
 }
 
 /*******************************************************************************
@@ -1440,22 +1305,6 @@ static bool getBool( debugSession * session )
 }
 
 
-/*
- * getAddress()
- *
- *	Reads a pointer value from the server
- */
-
-static void *getAddress( debugSession * session )
-{
-	void *result;
-
-	readn( session->serverSocket, &result, sizeof(result));
-
-	return result;
-}
-
-
 /*******************************************************************************
  * getUInt32()
  *
@@ -1499,35 +1348,6 @@ static char * getNString( debugSession * session )
 
 		return( result );
 	}
-}
-
-/*******************************************************************************
- * resolveHostName()
- *
- *	Given the name of a host (hostName), this function returns the IP address
- *	of that host (or 0 if the name does not resolve to an address).
- *
- *	FIXME: this function should probably be a bit more flexibile.
- */
-
-#ifndef INADDR_NONE
-#define INADDR_NONE ((unsigned long int) -1)	/* For Solaris */
-#endif
-
-static uint32 resolveHostName( const char * hostName )
-{
-    struct hostent * hostDesc;
-    uint32           hostAddress;
-
-    if(( hostDesc = gethostbyname( hostName )))
-		hostAddress = ((struct in_addr *)hostDesc->h_addr )->s_addr;
-    else
-		hostAddress = inet_addr( hostName );
-
-    if(( hostAddress == -1 ) || ( hostAddress == INADDR_NONE ))
-		return( 0 );
-	else
-		return( hostAddress );
 }
 
 /*******************************************************************************
@@ -1578,73 +1398,6 @@ static void cleanupAtExit( int code, Datum arg )
 		closeSession( mostRecentSession );
 
 	mostRecentSession = NULL;
-}
-
-static int allocateServerListener( int * port )
-{
-	int	 						sockfd       	= socket( AF_INET, SOCK_STREAM, 0 );
-	struct sockaddr_in 			proxy_addr     	= {0};
-	socklen_t					proxy_addr_len 	= sizeof( proxy_addr );
-	int							reuse_addr_flag = 1;
-#ifdef WIN32
-	WORD 		                wVersionRequested;
-	WSADATA 	                wsaData;
-	u_long                      blockingMode = 0;
-#endif
-
-	/* Ask the TCP/IP stack for an unused port */
-	proxy_addr.sin_family      = AF_INET;
-	proxy_addr.sin_port        = htons( 0 );
-	proxy_addr.sin_addr.s_addr = htonl( INADDR_ANY );
-
-#ifdef WIN32
-
-	wVersionRequested = MAKEWORD( 2, 2 );
-
-	if( WSAStartup( wVersionRequested, &wsaData ) != 0 )
-	{
-		/* Tell the user that we could not find a usable
-		 * WinSock DLL.
-		 */
-		return 0;
-	}
-
-	/* Confirm that the WinSock DLL supports 2.2.
-	 * Note that if the DLL supports versions greater
-	 * than 2.2 in addition to 2.2, it will still return
-	 * 2.2 in wVersion since that is the version we
-	 * requested.
-	 */
-
-	if ( LOBYTE( wsaData.wVersion ) != 2 ||HIBYTE( wsaData.wVersion ) != 2 )
-	{
-		/* Tell the user that we could not find a usable
-		 * WinSock DLL.
-		 */
-		WSACleanup( );
-		return 0;
-	}
-#endif
-
-	setsockopt( sockfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse_addr_flag, sizeof( reuse_addr_flag ));
-
-	/* Bind a listener socket to that port */
-	if( bind( sockfd, (struct sockaddr *)&proxy_addr, sizeof( proxy_addr )) < 0 )
-		ereport( ERROR, ( ERRCODE_CONNECTION_FAILURE, errmsg( "could not create listener for debugger connection" )));
-
-	/* Get the port number selected by the TCP/IP stack */
-	getsockname( sockfd, (struct sockaddr *)&proxy_addr, &proxy_addr_len );
-
-	*port = (int) ntohs( proxy_addr.sin_port );
-
-	/* Get ready to wait for a client */
-	listen( sockfd, 2 );
-
-#ifdef WIN32
-	ioctlsocket( sockfd, FIONBIO,  &blockingMode );
-#endif
-
-	return( sockfd );
 }
 
 /*******************************************************************************
