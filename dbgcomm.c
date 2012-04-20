@@ -20,6 +20,7 @@
 
 #include "miscadmin.h"
 #include "storage/backendid.h"
+#include "storage/lwlock.h"
 #include "storage/shmem.h"
 #include "storage/sinvaladt.h"
 
@@ -58,6 +59,7 @@
 typedef struct
 {
 	int			status;
+	int			pid;
 	int			port;
 } dbgcomm_target_slot_t;
 
@@ -136,7 +138,6 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	struct sockaddr_in   localaddr = {0};
 	socklen_t	addrlen 	= sizeof( remoteaddr );
 	int			reuse_addr_flag = 1;
-	int			remoteport;
 
 	dbgcomm_init();
 
@@ -177,6 +178,7 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	/* XXX: locking */
 	dbgcomm_slots[MyBackendId].port = ntohs(localaddr.sin_port);
 	dbgcomm_slots[MyBackendId].status = DBGCOMM_CONNECTING_TO_PROXY;
+	dbgcomm_slots[MyBackendId].pid = MyProcPid;
 
 	remoteaddr.sin_family 	   = AF_INET;
 	remoteaddr.sin_port        = htons(proxyPort);
@@ -188,7 +190,7 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	{
 		ereport(COMMERROR,
 				(errcode_for_socket_access(),
-				 errmsg("could not connect to debugging proxy at port %d: %m", remoteport)));
+				 errmsg("could not connect to debugging proxy at port %d: %m", proxyPort)));
 		/*
 		 * Reset our entry in the array. On success, this will be done by
 		 * the proxy.
@@ -256,6 +258,7 @@ dbgcomm_listen_for_proxy(void)
 	/* XXX: locking */
 	dbgcomm_slots[MyBackendId].port = localport;
 	dbgcomm_slots[MyBackendId].status = DBGCOMM_LISTENING_FOR_PROXY;
+	dbgcomm_slots[MyBackendId].pid = MyProcPid;
 
 	/* Notify the client application that this backend is waiting for a proxy. */
 	elog(NOTICE, "PLDBGBREAK:%d", MyBackendId);
@@ -408,8 +411,8 @@ dbgcomm_accept_target(int sockfd, int *targetPid)
 			if (dbgcomm_slots[i].status == DBGCOMM_CONNECTING_TO_PROXY &&
 				dbgcomm_slots[i].port == ntohs(remoteaddr.sin_port))
 			{
+				*targetPid = dbgcomm_slots[i].pid;
 				dbgcomm_slots[i].status = DBGCOMM_IDLE;
-				*targetPid = BackendIdGetProc(i)->pid;
 				break;
 			}
 		}
