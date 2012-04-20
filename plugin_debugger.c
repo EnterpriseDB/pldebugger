@@ -123,6 +123,7 @@ static bool 		 parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpoi
 static bool 		 addLocalBreakpoint( Oid funcOID, int lineNo );
 static void			 reserveBreakpoints( void );
 static debugger_language_t *language_of_frame(ErrorContextCallback *frame);
+static char * findSource( Oid oid, HeapTuple * tup );
 
 static void do_deposit(ErrorContextCallback *frame, debugger_language_t *lang,
 					   char *command);
@@ -418,7 +419,7 @@ static void dbg_send_src( char * command  )
  *	you are finished with it).
  */
 
-char * findSource( Oid oid, HeapTuple * tup )
+static char * findSource( Oid oid, HeapTuple * tup )
 {
 	bool	isNull;
 
@@ -1309,7 +1310,6 @@ typedef struct BreakCount
  * Prototypes for functions which operate on GlobalBreakCounts.
  *-------------------------------------------------------------------------------------
  */
-static void initGlobalBreakpoints(int size);
 static void initLocalBreakpoints(void);
 static void initLocalBreakCounts(void);
 
@@ -1333,7 +1333,7 @@ initializeHashTables(void)
 {
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
-	initGlobalBreakpoints(globalBreakpointCount);
+	initGlobalBreakpoints();
 
 	LWLockRelease(AddinShmemInitLock);
 
@@ -1353,11 +1353,12 @@ initLocalBreakpoints(void)
 	localBreakpoints = hash_create("Local Breakpoints", 128, &ctl, HASH_ELEM | HASH_FUNCTION);
 }
 
-static void
-initGlobalBreakpoints(int tableEntries)
+void
+initGlobalBreakpoints(void)
 {
 	bool   	  		found;
 	LWLockId	   *lockId;
+	int				tableEntries = globalBreakpointCount;
 
 	if(( lockId = ((LWLockId *)ShmemInitStruct( "Global Breakpoint LockId", sizeof( LWLockId ), &found ))) == NULL )
 		elog(ERROR, "out of shared memory");
@@ -1371,7 +1372,7 @@ initGlobalBreakpoints(int tableEntries)
 		 * in shared memory so other processes can find it later.
 		 */
 		if (!found)
-		    *lockId = breakpointLock = LWLockAssign();
+			*lockId = breakpointLock = LWLockAssign();
 		else
 			breakpointLock = *lockId;
 
@@ -1399,6 +1400,24 @@ initGlobalBreakpoints(int tableEntries)
 		if (!globalBreakCounts)
 			elog(FATAL, "could not initialize global breakpoints count hash table");
 	}
+}
+
+
+/* ---------------------------------------------------------
+ * getPLDebuggerLock()
+ *
+ *	Returns the lockid of the lock used to protect pldebugger shared memory
+ *  structures. The lock is called breakpointLock in this file, but it's
+ *  also shared by dbgcommm.c.
+ */
+
+LWLockId
+getPLDebuggerLock(void)
+{
+	if( localBreakpoints == NULL )
+		initializeHashTables();
+
+	return breakpointLock;
 }
 
 /* ---------------------------------------------------------

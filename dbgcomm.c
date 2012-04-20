@@ -25,6 +25,7 @@
 #include "storage/sinvaladt.h"
 
 #include "dbgcomm.h"
+#include "pldebugger.h"
 
 /*
  * Shared memory structure. This is used for authenticating debugger
@@ -84,7 +85,6 @@ void
 dbgcomm_reserve(void)
 {
 	RequestAddinShmemSpace(sizeof(dbgcomm_target_slot_t) * MaxBackends);
-	RequestAddinLWLocks( 1 );
 }
 
 /*
@@ -98,7 +98,7 @@ dbgcomm_init(void)
 	if (dbgcomm_slots)
 		return;
 
-	/* XXX: locking */
+	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 	dbgcomm_slots = ShmemInitStruct("Debugger Connection slots", sizeof(dbgcomm_target_slot_t) * MaxBackends, &found);
 	if (dbgcomm_slots == NULL)
 		elog(ERROR, "out of shared memory");
@@ -109,6 +109,7 @@ dbgcomm_init(void)
 		for (i = 0; i < MaxBackends; i++)
 			dbgcomm_slots[i].status = DBGCOMM_IDLE;
 	}
+	LWLockRelease(getPLDebuggerLock());
 }
 
 
@@ -175,10 +176,11 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	/* Get the port number selected by the TCP/IP stack */
 	getsockname(sockfd, (struct sockaddr *) &localaddr, &addrlen);
 
-	/* XXX: locking */
+	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 	dbgcomm_slots[MyBackendId].port = ntohs(localaddr.sin_port);
 	dbgcomm_slots[MyBackendId].status = DBGCOMM_CONNECTING_TO_PROXY;
 	dbgcomm_slots[MyBackendId].pid = MyProcPid;
+	LWLockRelease(getPLDebuggerLock());
 
 	remoteaddr.sin_family 	   = AF_INET;
 	remoteaddr.sin_port        = htons(proxyPort);
@@ -195,8 +197,10 @@ dbgcomm_connect_to_proxy(int proxyPort)
 		 * Reset our entry in the array. On success, this will be done by
 		 * the proxy.
 		 */
+		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 		dbgcomm_slots[MyBackendId].port = 0;
 		dbgcomm_slots[MyBackendId].status = DBGCOMM_IDLE;
+		LWLockRelease(getPLDebuggerLock());
 		return -1;
 	}
 
@@ -217,6 +221,7 @@ dbgcomm_listen_for_proxy(void)
 	int			sockfd;
 	int			serverSocket;
 	int			localport;
+	bool		done;
 
 	dbgcomm_init();
 
@@ -224,7 +229,6 @@ dbgcomm_listen_for_proxy(void)
 		elog(ERROR, "invalid backend id"); /* shouldn't happen */
 
 	sockfd = socket( AF_INET, SOCK_STREAM, 0 );
-	/* XXX check return code */
 	if (sockfd < 0)
 	{
 		ereport(COMMERROR,
@@ -246,7 +250,7 @@ dbgcomm_listen_for_proxy(void)
 	getsockname(sockfd, (struct sockaddr *) &localaddr, &addrlen);
 	localport = ntohs(localaddr.sin_port);
 
-	/* Get ready to wait for a client. XXX check return code */
+	/* Get ready to wait for a client. */
 	if (listen(sockfd, 2) < 0)
 	{
 		ereport(COMMERROR,
@@ -255,18 +259,18 @@ dbgcomm_listen_for_proxy(void)
 		return -1;
 	}
 
-	/* XXX: locking */
+	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 	dbgcomm_slots[MyBackendId].port = localport;
 	dbgcomm_slots[MyBackendId].status = DBGCOMM_LISTENING_FOR_PROXY;
 	dbgcomm_slots[MyBackendId].pid = MyProcPid;
+	LWLockRelease(getPLDebuggerLock());
 
 	/* Notify the client application that this backend is waiting for a proxy. */
 	elog(NOTICE, "PLDBGBREAK:%d", MyBackendId);
 
-	dbgcomm_init();
-
 	/* wait for the other end to connect to us */
-	for (;;)
+	done = false;
+	while (!done)
 	{
 		serverSocket = accept(sockfd, (struct sockaddr *) &remoteaddr, &addrlen);
 		if (serverSocket < 0)
@@ -277,18 +281,16 @@ dbgcomm_listen_for_proxy(void)
 		 * Authenticate the connection. We do this by checking that the remote
 		 * end's port number matches what's posted in the shared memory slot.
 		 */
-		/* XXX: locking */
+		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 		if (dbgcomm_slots[MyBackendId].status == DBGCOMM_PROXY_CONNECTING &&
 			dbgcomm_slots[MyBackendId].port == ntohs(remoteaddr.sin_port))
 		{
 			dbgcomm_slots[MyBackendId].status = DBGCOMM_IDLE;
-			break;
+			done = true;
 		}
 		else
-		{
 			close(serverSocket);
-			continue;
-		}
+		LWLockRelease(getPLDebuggerLock());
 	}
 
 	close(sockfd);
@@ -351,7 +353,7 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 	 * Check which port the backend is listening on, and let it know we're
 	 * connecting to it from this port.
 	 */
-	/* XXX: locking */
+	LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 	if (dbgcomm_slots[targetBackend].status != DBGCOMM_LISTENING_FOR_PROXY)
 	{
 		close(sockfd);
@@ -361,6 +363,7 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 	remoteport = dbgcomm_slots[targetBackend].port;
 	dbgcomm_slots[targetBackend].port = localport;
 	dbgcomm_slots[targetBackend].status = DBGCOMM_PROXY_CONNECTING;
+	LWLockRelease(getPLDebuggerLock());
 
 	/* Now connect to the other end. */
 	remoteaddr.sin_family 	   = AF_INET;
@@ -405,7 +408,7 @@ dbgcomm_accept_target(int sockfd, int *targetPid)
 		 * Authenticate the connection. We do this by checking that the remote
 		 * end's port number is listed in a slot in shared memory.
 		 */
-		/* XXX: locking */
+		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 		for (i = 0; i < MaxBackends; i++)
 		{
 			if (dbgcomm_slots[i].status == DBGCOMM_CONNECTING_TO_PROXY &&
@@ -416,6 +419,7 @@ dbgcomm_accept_target(int sockfd, int *targetPid)
 				break;
 			}
 		}
+		LWLockRelease(getPLDebuggerLock());
 		if (i >= MaxBackends)
 		{
 			/*

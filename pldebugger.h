@@ -1,6 +1,9 @@
 #ifndef PLDEBUGGER_H
 #define PLDEBUGGER_H
 
+#include "globalbp.h"
+#include "storage/lwlock.h"
+
 /* 
  * We keep one per_session_ctx structure per backend. This structure holds all
  * of the stuff that we need to track from one function call to the next.
@@ -62,11 +65,11 @@ typedef struct
 } debugger_language_t;
 
 /* in plugin_debugger.c */
+extern void initGlobalBreakpoints(void);
 extern bool plugin_debugger_main_loop(void);
 
 extern bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, int lineNumber );
 extern bool attach_to_proxy( Breakpoint * breakpoint );
-extern char * findSource( Oid oid, HeapTuple * tup );
 extern void setBreakpoint( char * command );
 extern void clearBreakpoint( char * command );
 extern bool breakpointsForFunction( Oid funcOid );
@@ -79,6 +82,8 @@ __attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)))
 #endif
 ;
 extern char 	   * dbg_read_str(void);
+
+extern LWLockId  getPLDebuggerLock(void);
 
 /* in plpgsql_debugger.c */
 extern void plpgsql_debugger_fini(void);
