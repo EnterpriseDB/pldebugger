@@ -14,6 +14,11 @@
 #include "postgres.h"
 
 #include <unistd.h>
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+#include <sys/time.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -21,6 +26,7 @@
 #include "miscadmin.h"
 #include "storage/backendid.h"
 #include "storage/lwlock.h"
+#include "storage/pmsignal.h"
 #include "storage/shmem.h"
 #include "storage/sinvaladt.h"
 
@@ -450,6 +456,46 @@ dbgcomm_accept_target(int sockfd, int *targetPid)
 	/* wait for the target to connect to us */
 	for (;;)
 	{
+		fd_set		rmask;
+		int			rc;
+		struct timeval timeout;
+
+		/* Check for query cancel or termination request */
+		CHECK_FOR_INTERRUPTS();
+		if (!PostmasterIsAlive())
+		{
+			/* Emergency bailout if postmaster has died. */
+			ereport(FATAL,
+					(errmsg("canceling debugging session because postmaster died")));
+		}
+
+		FD_ZERO(&rmask);
+		FD_SET(sockfd, &rmask);
+
+		/*
+		 * Wake up every 1 second to check if we've been killed or
+		 * postmaster has died.
+		 */
+		timeout.tv_sec  = 1;
+		timeout.tv_usec = 0;
+
+		rc = select(sockfd + 1, &rmask, NULL, NULL, &timeout);
+		if (rc < 0)
+		{
+			if (errno == EINTR)
+				continue;
+			/* anything else is an error */
+			ereport(ERROR,
+					(errmsg("select() failed while waiting for target: %m")));
+		}
+		if (rc == 0)
+		{
+			/* Timeout expired. */
+			continue;
+		}
+		if (!FD_ISSET(sockfd, &rmask))
+			continue;
+
 		serverSocket = accept(sockfd, (struct sockaddr *) &remoteaddr, &addrlen);
 		if (serverSocket < 0)
 			ereport(ERROR,
