@@ -26,6 +26,7 @@ DROP FUNCTION pldbg_create_listener();
 DROP FUNCTION pldbg_continue(INTEGER);
 DROP FUNCTION pldbg_attach_to_port(INTEGER);
 DROP FUNCTION pldbg_abort_target(INTEGER);
+DROP FUNCTION pldbg_oid_debug(OID);
 DROP FUNCTION plpgsql_oid_debug(OID);
 
 DROP TYPE proxyInfo;

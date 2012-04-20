@@ -33,6 +33,11 @@
 #include "dbgcomm.h"
 #include "pldebugger.h"
 
+#if (PG_VERSION_NUM < 90200)
+/* before 9.2, PostmasterIsAlive() had one parameter */
+#define PostmasterIsAlive()	PostmasterIsAlive(false)
+#endif
+
 /*
  * Shared memory structure. This is used for authenticating debugger
  * connections. Each backend has a dedicated slot.
