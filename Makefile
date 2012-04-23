@@ -66,8 +66,6 @@ else
 override CFLAGS += $(CFLAGS_SL) 
 endif
 
-SHLIB_LINK      += $(BE_DLLLIBS)
-
 all:	$(addsuffix $(DLSUFFIX), $(PLUGIN_big))
 
 install: all installdirs installdir-plugins install-plugins
