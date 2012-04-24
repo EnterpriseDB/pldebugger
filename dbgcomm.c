@@ -391,10 +391,11 @@ dbgcomm_connect_to_target(BackendId targetBackend)
 	/* Sockets seem to be non-blocking by default on Windows.. */
 	if (!pg_set_block(sockfd))
 	{
+		int save_errno = errno;
 		closesocket(sockfd);
-		ereport(COMMERROR,
-			(errmsg("could not set socket to blocking mode: %m")));
-		return -1;
+		errno = save_errno;
+		ereport(ERROR,
+				(errmsg("could not set socket to blocking mode: %m")));
 	}
 
 	/*

@@ -93,14 +93,13 @@
 #include "funcapi.h"
 #include "utils/memutils.h"
 #include "utils/builtins.h"
-#include "storage/ipc.h"					/* For on_proc_exit()  			*/
+#include "storage/ipc.h"					/* For on_shmem_exit()  		*/
 #include "storage/proc.h"					/* For MyProc		   			*/
-#include "storage/procarray.h"				/* For BackendPidGetProc		*/
 #include "libpq/libpq-be.h"					/* For Port						*/
 #include "miscadmin.h"						/* For MyProcPort				*/
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "access/heapam.h"					/* For heap_form_tuple()		*/
+#include "access/htup.h"					/* For heap_form_tuple()		*/
 #include "access/hash.h"					/* For dynahash stuff			*/
 
 #include <errno.h>
@@ -139,7 +138,6 @@ PG_FUNCTION_INFO_V1( pldbg_drop_breakpoint );		/* DROP BREAKPOINT equivalent (de
 PG_FUNCTION_INFO_V1( pldbg_select_frame );			/* Change the focus to a different stack frame	*/
 PG_FUNCTION_INFO_V1( pldbg_deposit_value );		 	/* Change the value of an in-scope variable		*/
 PG_FUNCTION_INFO_V1( pldbg_abort_target );			/* Abort execution of the target - throws error */
-PG_FUNCTION_INFO_V1( pldbg_get_pkg_cons );			/* Get package constructor OID					*/
 PG_FUNCTION_INFO_V1( pldbg_get_proxy_info );		/* Get server version, proxy API version, ...   */
 
 PG_FUNCTION_INFO_V1( pldbg_create_listener );		/* Create a listener for global breakpoints		*/
@@ -220,7 +218,6 @@ static HTAB			* sessionHash;
 #define	TYPE_NAME_BREAKPOINT	"breakpoint"	/* May change to pldbg.breakpoint later	*/
 #define TYPE_NAME_FRAME			"frame"			/* May change to pldbg.frame later		*/
 #define TYPE_NAME_VAR			"var"			/* May change to pldbg.var later		*/
-#define TYPE_NAME_TARGET		"targetInfo"	/* May change to pldbg.targetInfo later */
 
 #define GET_STR( textp ) 		DatumGetCString( DirectFunctionCall1( textout, PointerGetDatum( textp )))
 #define PG_GETARG_SESSION( n )  (sessionHandle)PG_GETARG_UINT32( n )
@@ -1360,15 +1357,7 @@ static char * getNString( debugSession * session )
 static void closeSession( debugSession * session )
 {
 	if( session->serverSocket )
-	{
-#ifdef WIN32
-		shutdown( session->serverSocket, SD_SEND );
-        closesocket( session->serverSocket );
-#else
-		shutdown( session->serverSocket, SHUT_WR );
-        close( session->serverSocket );
-#endif
-	}
+	        closesocket( session->serverSocket );
 
 	if( session->listener )
 		BreakpointCleanupProc( MyProcPid );
