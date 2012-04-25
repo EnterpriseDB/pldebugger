@@ -16,8 +16,6 @@ CREATE TYPE frame      AS ( level INT, targetname TEXT, func OID, linenumber INT
 CREATE TYPE var		   AS ( name TEXT, varClass char, lineNumber INTEGER, isUnique bool, isConst bool, isNotNull bool, dtype OID, value TEXT );
 CREATE TYPE proxyInfo  AS ( serverVersionStr TEXT, serverVersionNum INT, proxyAPIVer INT, serverProcessID INT );
 
-CREATE FUNCTION pldbg_can_debug_lang( langOID OID) RETURNS bool AS
-
 CREATE FUNCTION pldbg_oid_debug( functionOID OID ) RETURNS INTEGER AS '$libdir/plugins/plugin_debugger' LANGUAGE C STRICT;
 
 -- for backwards-compatibility
