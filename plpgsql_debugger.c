@@ -967,7 +967,7 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 	 *	     transaction so we don't free it out from under spl_plpgsql_xact_cb()
 	 */
 
-	expr = (PLpgSQL_expr *) palloc( sizeof( *expr ));
+	expr = (PLpgSQL_expr *) palloc0( sizeof( *expr ));
 
 	expr->dtype       	   = PLPGSQL_DTYPE_EXPR;
 	expr->dno              = -1;
