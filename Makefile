@@ -1,37 +1,19 @@
 ################################################################################
 ##
-##	This Makefile will build the following targets:
+## This Makefile builds plugin_debugger.so. It consists of a PL/pgSQL
+## interpreter plugin, and a set of functions that form an SQL interface
+## to the PL/pgSQL debugger.
 ##
-## 	  plugin_debugger.so	 - a PL/pgSQL interpreter plugin, this is the server
-##                             side of the PL/pgSQL debugger
-##
-##	  pldbgapi.so		     - a set of functions that form an SQL interface to
-##							   the PL/pgSQL debugger
-##
-##  Note that this Makefile will build shared-objects with the correct suffix
-##  (.so, .dll, or .sl) depending on the platform that you are compiling on,
-##
-##	Note: $(DLSUFFIX) is set to .so, .dll, or .sl, depending on what kind
-##  of platform you are compiling on.  So plugin_debugger$(DLSUFFIX) is 
-##  equivalent to plugin_debugger.dll on Windows and plugin_debugger.so on 
-##  Linux
-##
-##  The pldbgapi.so shared-object should be installed in $libdir, the
-##  plugin shared-objects should be installed in $libdir/plugins
-##
-## Copyright (c) 2004-2007 EnterpriseDB Corporation. All Rights Reserved.
+## Copyright (c) 2004-2012 EnterpriseDB Corporation. All Rights Reserved.
 ##
 ## Licensed under the Artistic License, see 
 ##		http://www.opensource.org/licenses/artistic-license.php
 ## for full details
 
 EXTENSION  = pldbgapi
-MODULES = pldbgapi
-PLUGIN_big = plugin_debugger
+MODULE_big = plugin_debugger
 
-# OBJS lists the .o files comprising plugin_debugger.so. pldbgapi.so is
-# implicitly built from pldbgapi.c file.
-OBJS	   = plpgsql_debugger.o plugin_debugger.o dbgcomm.o
+OBJS	   = plpgsql_debugger.o plugin_debugger.o dbgcomm.o pldbgapi.o
 ifdef INCLUDE_PACKAGE_SUPPORT
 OBJS += spl_debugger.o
 endif
@@ -51,48 +33,10 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
-ifdef PLUGIN_big
-# shared library parameters
-NAME = $(PLUGIN_big)
-
-include $(top_srcdir)/src/Makefile.shlib
-
-all: all-lib
-endif # PLUGIN_big
-
-ifeq ($(PORTNAME), win32)
-override CFLAGS += $(CFLAGS_SL) -I$(top_builddir)/src/pl/plpgsql/src
-else
-override CFLAGS += $(CFLAGS_SL) 
-endif
-
-all:	$(addsuffix $(DLSUFFIX), $(PLUGIN_big))
-
-install: all installdirs installdir-plugins install-plugins
-
-clean: clean-plugins
-
-uninstall: uninstall-plugins
-
-install-plugins: installdir-plugins $(addsuffix $(DLSUFFIX), $(PLUGIN_big))
-	$(INSTALL_SHLIB) $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) '$(DESTDIR)$(pkglibdir)/plugins/'
-
-clean-plugins:
-	rm -f $(addsuffix $(DLSUFFIX), $(PLUGIN_big)) $(PLUGIN_OBJS) spl_debugger.c
-
-uninstall-plugins:
-	rm -f $(addprefix '$(DESTDIR)$(pkglibdir)'/plugins/, $(addsuffix $(DLSUFFIX), $(PLUGIN_big)))
-
-# MKDIR_P replaced mkinstalldirs in PG8.5+
-installdir-plugins:
-	$(MKDIR_P)$(mkinstalldirs) '$(DESTDIR)$(pkglibdir)/plugins'
-
-################################################################################
-## Rules for making the debugger plugin.
-##
-## 
-plugin_debugger$(DLSUFFIX): $(PLUGIN_OBJS)
-
+# plpgsql_debugger.c needs plpgsql.h. Beginning with server version 9.2,
+# it is installed into include/server, but when building without pgxs,
+# with the pldebugger directory being directly in the server source tree's
+# contrib directory, we need to tell the compiler where to find it.
 plpgsql_debugger.o: CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
 
 ################################################################################
@@ -116,44 +60,4 @@ spl_debugger.o: 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1 -I$(top_builddir)/src/pl/
 # There's some tiny differences in plugin_debugger.c, if we're including SPL
 # language. Pass the INCLUDE_PACKAGE_SUPPORT flag to plugin_debugger.c too.
 plugin_debugger.o: CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1
-endif
-
-################################################################################
-## Rules for making the pldbgapi
-##
-##   NOTE: On Windows, pldbgapi.dll must link against plugin_debugger.dll 
-##		   (because pldbgapi.dll needs the global breakpoint code defined 
-##		   in plugin_debugger.dll).  
-##
-##	 	   Ideally, we could just define a target-specific variable and 
-##		   an explicit pre-requisite to handle this:
-##			pldbgapi$(DLSUFFIX):  SHLIB_LINK += plugin_debugger$(DLSUFFIX)
-##		    pldbgapi$(DLSUFFIX):  plugin_debugger$(DLSUFFIX)
-##
-##		   But GNU Make propogates the target-specific variable to the 
-##		   the prerequisite which would force plugin_debugger.dll to 
-##		   link against itself
-##   
-
-ifeq ($(PORTNAME), win32)
-
-pldbgapi$(DLSUFFIX):	pldbgapi.o plugin_debugger$(DLSUFFIX)
-	$(DLLTOOL) --export-all --output-def $*.def $<
-	$(DLLWRAP) -o $@ --def $*.def $< $(SHLIB_LINK) plugin_debugger$(DLSUFFIX)
-	rm -r $*.def
-
-endif
-
-################################################################################
-##
-##  NOTE: On OS X (Darwin), we ignore undefined references in pldbgapi. These
-##                are actually in plugin_debugger.so and will be present at
-##                runtime. Someone with more ld/gcc foo than I may be able to
-##                figure out a nicer way of telling the linker these symbols
-##                really do exist!! -Dave.
-
-ifeq ($(PORTNAME), darwin)
-
-pldbgapi$(DLSUFFIX):   CFLAGS += -undefined dynamic_lookup
-
 endif

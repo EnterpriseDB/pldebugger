@@ -43,15 +43,6 @@
 #include "pldebugger.h"
 #include "dbgcomm.h"
 
-/*
- * Let the PG module loader know that we are compiled against
- * the right version of the PG header files
- */
-
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
-
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
 
 #define	TARGET_PROTO_VERSION	"1.0"
