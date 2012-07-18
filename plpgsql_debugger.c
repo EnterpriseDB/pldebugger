@@ -1,7 +1,7 @@
 /**********************************************************************
  * plpgsql_debugger.c	- Debugger for the PL/pgSQL procedural language
  *
- * Copyright (c) 2004-2007 EnterpriseDB Corporation. All Rights Reserved.
+ * Copyright (c) 2004-2012 EnterpriseDB Corporation. All Rights Reserved.
  *
  * Licensed under the Artistic License, see 
  *		http://www.opensource.org/licenses/artistic-license.php

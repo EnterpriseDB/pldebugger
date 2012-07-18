@@ -4,7 +4,7 @@
  * This file defines the functions used to establish connections between
  * the debugging proxy and target backend.
  *
- * Copyright (c) 2012 EnterpriseDB Corporation. All Rights Reserved.
+ * Copyright (c) 2004-2012 EnterpriseDB Corporation. All Rights Reserved.
  *
  * Licensed under the Artistic License, see 
  *		http://www.opensource.org/licenses/artistic-license.php
