@@ -1285,9 +1285,6 @@ static HTAB *localBreakCounts;
 typedef struct BreakCountKey
 {
 	Oid			databaseId;
-#if INCLUDE_PACKAGE_SUPPORT
-	Oid		   	packageId;		/* Not used, but included to match BreakpointKey so casts work as expected */
-#endif
     Oid			functionId;
 } BreakCountKey;
 
