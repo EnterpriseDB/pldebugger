@@ -1000,11 +1000,7 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 	}
 	PG_CATCH();
 	{	
-		ErrorData * edata;
-
 		MemoryContextSwitchTo( curContext );
-
-		edata = CopyErrorData();
 
 		FlushErrorState();
 
@@ -1059,11 +1055,7 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 		}
 		PG_CATCH();
 		{	
-			ErrorData * edata;
-
 			MemoryContextSwitchTo( curContext );
-
-			edata = CopyErrorData();
 
 			FlushErrorState();
 

@@ -371,22 +371,11 @@ static void dbg_send_src( char * command  )
     HeapTuple			tup;
     char				*procSrc;
 	Oid					targetOid = InvalidOid;  /* Initialize to keep compiler happy */
-	TransactionId		xmin;
-	CommandId			cmin;
 
 	targetOid = atoi( command + 2 );
 
 	/* Find the source code for this function */
 	procSrc = findSource( targetOid, &tup );
-										
-	xmin = HeapTupleHeaderGetXmin( tup->t_data );
-
-	if( TransactionIdIsCurrentTransactionId( xmin ))
-		cmin = HeapTupleHeaderGetCmin( tup->t_data );
-	else
-		cmin = 0;
-
-	/* FIXME: We need to send the xmin and cmin to the client too so he can know when to flush his cache */
 
 	/* Found it - now send the source to the client */
 
