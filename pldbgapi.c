@@ -205,7 +205,6 @@ static HTAB			* sessionHash;
 #define PLDBG_GET_SOURCE			"#" 		/* Followed by pkgoid:funcoid				*/
 #define PLDBG_DEPOSIT				"d"			/* Followed by var.line=value				*/
 
-#define PROXY_PROTO_VERSION		"2.0"		/* Proxy/Target protocol version			*/
 #define PROXY_API_VERSION		3			/* API version number						*/
 
 /*******************************************************************************
