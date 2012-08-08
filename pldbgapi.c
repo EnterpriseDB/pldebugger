@@ -57,10 +57,10 @@
  *
  *	Each time the target pauses, it returns a tuple of type 'breakpoint'.
  *  That tuple contains the OID of the function that the target has paused
- *  in (and the package OID if appropriate) and the line number at which 
- *	the target has paused. The fact that the target returns a tuple of 
- *	type breakpoint does not imply that the target has paused at a breakpoint -
- *	it may have paused because of a step-over or step-into operation.
+ *  in, and the line number at which the target has paused. The fact that the
+ *	target returns a tuple of type breakpoint does not imply that the target
+ *	has paused at a breakpoint - it may have paused because of a step-over or
+ *	step-into operation.
  *	 
  *	When the target is paused at a breakpoint (or has paused after
  *	a step-over or step-into), you can interrogate the target by calling
@@ -207,8 +207,6 @@ static HTAB			* sessionHash;
 
 #define PROXY_PROTO_VERSION		"2.0"		/* Proxy/Target protocol version			*/
 #define PROXY_API_VERSION		3			/* API version number						*/
-
-#define PACKAGE_LANG			"edbspl"	/* Package element language, by definition	*/
 
 /*******************************************************************************
  * We currently define three PostgreSQL data types (all tuples) - the following 
@@ -436,8 +434,7 @@ Datum pldbg_set_global_breakpoint( PG_FUNCTION_ARGS )
  *	first.
  *
  *	This function returns a tuple of type 'breakpoint' - such a tuple contains
- *	the function OID, package OID, and line number where the target is currently
- *	stopped.
+ *	the function OID and line number where the target is currently stopped.
  */
 
 static Datum buildBreakpointDatum( char * breakpointString )
@@ -594,7 +591,7 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 }
 
 /*******************************************************************************
- * pldbg_get_source( sessionID INTEGER, packageOID OID, functionOID OID )
+ * pldbg_get_source( sessionID INTEGER, functionOID OID )
  *   RETURNS CSTRING
  *
  *	This function returns the source code for the given function. A debugger 
@@ -746,8 +743,8 @@ Datum pldbg_get_variables( PG_FUNCTION_ARGS )
  *
  *	This function returns a SETOF frame tuples.  Each tuple in the result
  *	set contains information about one stack frame: the tuple contains the 
- *	package OID, function OID, and line number within that function.  Each tuple
- *	also contains a string that you can use to display the name and value of each
+ *	function OID, and line number within that function.  Each tuple also
+ *	contains a string that you can use to display the name and value of each
  *	argument to that particular invocation.
  */
 
@@ -834,7 +831,7 @@ Datum pldbg_get_proxy_info( PG_FUNCTION_ARGS )
 }
 
 /*******************************************************************************
- * pldbg_set_breakpoint(sessionID INT, package OID, function OID, lineNumber INT)
+ * pldbg_set_breakpoint(sessionID INT, function OID, lineNumber INT)
  *	RETURNS boolean
  *
  * Sets a *local* breakpoint in the target process.
@@ -855,7 +852,7 @@ Datum pldbg_set_breakpoint( PG_FUNCTION_ARGS )
 }
 
 /*******************************************************************************
- * pldbg_drop_breakpoint(sessionID INT, package OID, function OID, lineNumber INT)
+ * pldbg_drop_breakpoint(sessionID INT, function OID, lineNumber INT)
  *	RETURNS boolean
  */
 
