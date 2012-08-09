@@ -910,6 +910,8 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
 
 		dbg_info->package = plugin_funcs.get_package( namespaceOid );
 	}
+	else
+		dbg_info->package = InvalidOid;
 #endif
 }
 
