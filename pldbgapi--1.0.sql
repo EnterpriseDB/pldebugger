@@ -47,7 +47,42 @@ CREATE FUNCTION pldbg_wait_for_target( session INTEGER ) RETURNS INTEGER AS '$li
  * Deprecated. This is used by the pgAdmin debugger GUI, but new applications
  * should just query the catalogs directly.
  */
-CREATE TYPE targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvector, targetName NAME, argModes "char"[], argNames TEXT[], targetLang OID, fqName TEXT, returnsSet BOOL, returnType OID );
+CREATE TYPE targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvector, targetName NAME, argModes "char"[], argNames TEXT[], targetLang OID, fqName TEXT, returnsSet BOOL, returnType OID,
+
+  -- The following columns are only needed when running in an EnterpriseDB
+  -- server. On PostgreSQL, we return just dummy values for them.
+  --
+  -- 'isFunc' and 'pkg' only make sense on EnterpriseDB.  'isfunc' is true
+  -- if the function is a regular function, not a stored procedure or a
+  -- function that was created implictly to back a trigger created with the
+  -- Oracle-compatible CREATE TRIGGER syntax. If the function belongs to a
+  -- package, 'pkg' is the package's OID, or 0 otherwise.
+  --
+  -- 'argDefVals' is a representation of the function's argument DEFAULTs. 
+  -- That would be nice to have on PostgreSQL as well. Unfortunately our
+  -- current implementation relies on an EDB-only function to get that
+  -- information, so we cannot just use it as is. TODO: rewrite that using
+  -- pg_get_expr(pg_proc.proargdefaults).
+  isFunc BOOL,
+  pkg OID,
+  argDefVals TEXT[]
+);
+
+-- Create the pldbg_get_target_info() function. We use an inline code block
+-- so that we can check and create it slightly differently if running on
+-- an EnterpriseDB server.
+
+DO $do$
+
+declare
+  isedb bool;
+  createstmt text;
+begin
+
+  isedb = (SELECT version() LIKE 'EnterpriseDB%');
+
+  createstmt := $create_stmt$
+
 CREATE FUNCTION pldbg_get_target_info(signature text, targetType "char") returns targetinfo AS $$
   SELECT p.oid AS target,
          pronamespace AS schema,
@@ -68,7 +103,30 @@ CREATE FUNCTION pldbg_get_target_info(signature text, targetType "char") returns
          prolang AS targetlang,
          quote_ident(nspname) || '.' || quote_ident(proname) AS fqname,
          proretset AS returnsset,
-         prorettype AS returntype
+         prorettype AS returntype,
+$create_stmt$;
+
+-- Add the three EDB-columns to the query (as dummies if we're installing
+-- to PostgreSQL)
+IF isedb THEN
+  createstmt := createstmt ||
+$create_stmt$
+         p.protype=0 AS isfunc,
+         CASE WHEN n.nspparent <> 0 THEN n.oid ELSE 0 END AS pkg,
+	 edb_get_func_defvals(p.oid) AS argdefvals
+$create_stmt$;
+ELSE
+  createstmt := createstmt ||
+$create_stmt$
+         't'::bool AS isfunc,
+         0::oid AS pkg,
+	 NULL::text[] AS argdefvals
+$create_stmt$;
+END IF;  
+  -- End of conditional part
+
+  createstmt := createstmt ||
+$create_stmt$
   FROM pg_proc p, pg_namespace n
   WHERE p.pronamespace = n.oid
   AND p.oid = $1::oid
@@ -78,4 +136,8 @@ CREATE FUNCTION pldbg_get_target_info(signature text, targetType "char") returns
   -- expected to pass 'o' as target type, but it doesn't do anything.
   AND $2 = 'o'
 $$ LANGUAGE SQL;
+$create_stmt$;
 
+  execute createstmt;
+end;
+$do$;
