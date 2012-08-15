@@ -15,3 +15,21 @@ EXPORTS
   dbgcomm_accept_target
   _PG_init
   pldbg_oid_debug
+  pldbg_abort_target
+  pldbg_attach_to_port
+  pldbg_continue
+  pldbg_create_listener
+  pldbg_deposit_value
+  pldbg_drop_breakpoint
+  pldbg_get_breakpoints
+  pldbg_get_proxy_info
+  pldbg_get_source
+  pldbg_get_stack
+  pldbg_get_variables
+  pldbg_select_frame
+  pldbg_set_breakpoint
+  pldbg_set_global_breakpoint
+  pldbg_step_into
+  pldbg_step_over
+  pldbg_wait_for_breakpoint
+  pldbg_wait_for_target
