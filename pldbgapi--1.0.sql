@@ -111,7 +111,7 @@ $create_stmt$;
 IF isedb THEN
   createstmt := createstmt ||
 $create_stmt$
-         p.protype=0 AS isfunc,
+         p.protype='0' AS isfunc,
          CASE WHEN n.nspparent <> 0 THEN n.oid ELSE 0 END AS pkg,
 	 edb_get_func_defvals(p.oid) AS argdefvals
 $create_stmt$;
