@@ -5,21 +5,43 @@
 
     <Import Project="settings.projinc" />
 
+    <!-- Detect if we're running against community PostgreSQL, or
+	 EnterpriseDB's Advanced Server. When building against EDB, we include
+	 support for debugging the SPL language.
+    -->
+    <Choose>
+        <When Condition="Exists('$(PGPATH)\src\pl\edb-spl')">
+            <PropertyGroup>
+                <postgres>edb-postgres</postgres>
+
+                <SPL_SUPPORT>1</SPL_SUPPORT>
+                <SPL_CFLAGS>/D "INCLUDE_PACKAGE_SUPPORT=1"</SPL_CFLAGS>
+            </PropertyGroup>
+        </When>
+        <Otherwise>
+            <PropertyGroup>
+                <postgres>postgres</postgres>
+            </PropertyGroup>
+        </Otherwise>
+    </Choose>
+
     <!-- Setup for Debug or Release -->
     <Choose>
         <When Condition="'$(DEBUG)'=='1'">
             <PropertyGroup>
                 <XTRA_CFLAGS>/Od /MDd /Zi /D "DEBUG=1" /D "_DEBUG"</XTRA_CFLAGS>
-                <XTRA_LDFLAGS>/DEBUG /defaultlib:$(PGPATH)\Debug\postgres\postgres.lib</XTRA_LDFLAGS>
+                <XTRA_LDFLAGS>/DEBUG /defaultlib:$(PGPATH)\Debug\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
             </PropertyGroup>
         </When>
         <Otherwise>
             <PropertyGroup>
                 <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
-                <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\postgres\postgres.lib</XTRA_LDFLAGS>
+                <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
             </PropertyGroup>
         </Otherwise>
     </Choose>
+
+    <!-- Architecture-specific compiler flags -->
     <Choose>
         <When Condition="'$(ARCH)'=='x64'">
             <PropertyGroup>
@@ -44,38 +66,71 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ClCommand Include="/I$(PGPATH)\src\include" />
-        <ClCommand Include="/I$(PGPATH)\src\include\port\win32" />
-        <ClCommand Include="/I$(PGPATH)\src\include\port\win32_msvc" />
-        <ClCommand Include="/I$(PGPATH)\src\port" />
-        <ClCommand Include="/I$(PGPATH)\src\pl\plpgsql\src" />
-        <ClCommand Include="/I$(GETTEXTPATH)\include" />
-        <ClCommand Include="/I$(OPENSSLPATH)\include" />
-        <ClCommand Include="/I$(KERBEROSPATH)\inc\krb5" />
-    </ItemGroup>
-    
-    <!-- PLUGIN_DEBUGGER -->
-    
-    <ItemGroup>
-        <PluginDebuggerSrc Include="plugin_debugger.c" />
-        <PluginDebuggerSrc Include="plpgsql_debugger.c" />
-        <PluginDebuggerSrc Include="dbgcomm.c" />
-        <PluginDebuggerSrc Include="pldbgapi.c" />
+        <IncludeDirs Include="/I$(PGPATH)\src\include" />
+        <IncludeDirs Include="/I$(PGPATH)\src\include\port\win32" />
+        <IncludeDirs Include="/I$(PGPATH)\src\include\port\win32_msvc" />
+        <IncludeDirs Include="/I$(PGPATH)\src\port" />
+        <IncludeDirs Include="/I$(PGPATH)\src\pl\plpgsql\src" />
+        <IncludeDirs Include="/I$(PGPATH)\src\pl\edb-spl\src" />
+        <IncludeDirs Include="/I$(GETTEXTPATH)\include" />
+        <IncludeDirs Include="/I$(OPENSSLPATH)\include" />
+        <IncludeDirs Include="/I$(KERBEROSPATH)\inc\krb5" />
     </ItemGroup>
 
-    <Target Name="plugin_debugger" Inputs="@(PluginDebuggerSrc)" Outputs="plugin_debugger.dll">
+    <!-- Common source files -->
+    <ItemGroup>
+        <CommonSrc Include="plugin_debugger" />
+        <CommonSrc Include="dbgcomm" />
+        <CommonSrc Include="pldbgapi" />
+    </ItemGroup>
+
+    <!-- Source files specific to PL languages -->
+    <ItemGroup>
+        <PLLangSrc Include="plpgsql_debugger" />
+        <PLLangSrc Include="spl_debugger" Condition="'$(SPL_SUPPORT)'=='1'" />
+    </ItemGroup>
+
+
+    <Target Name="plugin_debugger"
+            Inputs="@(CommonSrc)"
+            Outputs="plugin_debugger.dll"
+            DependsOnTargets="plpgsql_debugger;spl_debugger">
         <Message Text="Building plugin_debugger.dll" />
-        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
-        <WriteLinesToFile File="flist" Lines="@(PluginDebuggerSrc)" Overwrite="false" />
-        <Exec Command="cl $(CFLAGS) @flist /link /def:plugin_debugger.def $(LDFLAGS)" />
+
+	<!-- Compile the common source files. -->
+        <Exec Command="cl $(CFLAGS) /c @(IncludeDirs, ' ') %(CommonSrc.Identity).c $(SPL_CFLAGS)" />
+
+	<!-- Link all the object files, including language-specific ones, to
+	     plugin_debugger.dll -->
+        <Exec Command="link @(CommonSrc -> '%(Filename).obj', ' ') @(PLLangSrc -> '%(Filename).obj', ' ') /def:plugin_debugger.def $(LDFLAGS)" />
     </Target>
-    
+
+    <Target Name="plpgsql_debugger"
+            Inputs="plpgsql_debugger.c"
+            Outputs="plpgsql_debugger.obj">
+        <Exec Command="cl $(CFLAGS) /c @(IncludeDirs, ' ') plpgsql_debugger.c" />
+    </Target>
+
+    <!-- Produce spl_debugger.c from plpgsql_debugger.c, by doing a text
+         search & replace of "plpgsql_" with "spl_" -->
+    <Target Name="spl_debugger" Inputs="plpgsql_debugger.c" Outputs="spl_debugger.obj"
+            Condition="'$(SPL_SUPPORT)'=='1'">
+
+        <!-- There is no easy way to do search & replace in MSBuild, at least
+	     not before version 4, so shell out to perl for this -->
+        <Exec command="perl -p -e s/plpgsql_/spl_/g &lt; plpgsql_debugger.c &gt; spl_debugger.c" />
+
+        <Exec Command="cl $(CFLAGS) /c @(IncludeDirs, ' ') spl_debugger.c $(SPL_CFLAGS)" />
+    </Target>
+
     <Target Name="clean">
         <Delete Files="plugin_debugger.dll" />
         <Delete Files="plugin_debugger.exp" />
         <Delete Files="plugin_debugger.lib" />
         <Delete Files="plugin_debugger.dll.manifest" />
-        <Delete Files="flist" />
+        <Delete Files="@(CommonSrc -> '%(Filename).obj')" />
+        <Delete Files="@(PLLangSrc -> '%(Filename).obj')" />
+        <Delete Files="spl_debugger.c" />
     </Target>
 
 </Project>
