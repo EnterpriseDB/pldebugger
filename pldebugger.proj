@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
 
-    <Target Name="all" DependsOnTargets="plugin_debugger;pldbgapi" />
+    <Target Name="all" DependsOnTargets="plugin_debugger" />
 
     <Import Project="settings.projinc" />
 
@@ -60,6 +60,7 @@
         <PluginDebuggerSrc Include="plugin_debugger.c" />
         <PluginDebuggerSrc Include="plpgsql_debugger.c" />
         <PluginDebuggerSrc Include="dbgcomm.c" />
+        <PluginDebuggerSrc Include="pldbgapi.c" />
     </ItemGroup>
 
     <Target Name="plugin_debugger" Inputs="@(PluginDebuggerSrc)" Outputs="plugin_debugger.dll">
@@ -69,25 +70,11 @@
         <Exec Command="cl $(CFLAGS) @flist /link /def:plugin_debugger.def $(LDFLAGS)" />
     </Target>
     
-    <!-- PLDBGAPI -->
-
-    <ItemGroup>
-        <PlDbgApiSrc Include="pldbgapi.c" />
-    </ItemGroup>
-
-    <Target Name="pldbgapi" Inputs="@(PlDbgApiSrc)" Outputs="pldbgapi.dll" DependsOnTargets="plugin_debugger">
-        <Message Text="Building pldbgapi.dll" />
-        <WriteLinesToFile File="flist" Lines="@(ClCommand)" Overwrite="true" />
-        <WriteLinesToFile File="flist" Lines="@(PlDbgApiSrc)" Overwrite="false" />
-        <Exec Command="cl $(CFLAGS) @flist /link /def:pldbgapi.def $(LDFLAGS) /defaultlib:plugin_debugger.lib" />
-    </Target>
-    
-    
     <Target Name="clean">
-        <Delete Files="plugin_debugger.dll;pldbgapi.dll" />
-        <Delete Files="plugin_debugger.exp;pldbgapi.exp" />
-        <Delete Files="plugin_debugger.lib;pldbgapi.lib" />
-        <Delete Files="plugin_debugger.dll.manifest;pldbgapi.dll.manifest" />
+        <Delete Files="plugin_debugger.dll" />
+        <Delete Files="plugin_debugger.exp" />
+        <Delete Files="plugin_debugger.lib" />
+        <Delete Files="plugin_debugger.dll.manifest" />
         <Delete Files="flist" />
     </Target>
 
