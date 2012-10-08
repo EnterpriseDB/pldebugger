@@ -15,7 +15,7 @@
                 <postgres>edb-postgres</postgres>
 
                 <SPL_SUPPORT>1</SPL_SUPPORT>
-                <SPL_CFLAGS>/D "INCLUDE_PACKAGE_SUPPORT=1"</SPL_CFLAGS>
+                <SPL_CFLAGS>/D "INCLUDE_PACKAGE_SUPPORT"</SPL_CFLAGS>
             </PropertyGroup>
         </When>
         <Otherwise>
