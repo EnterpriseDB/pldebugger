@@ -27,3 +27,19 @@ ALTER EXTENSION pldbgapi ADD FUNCTION pldbg_step_over( session INTEGER );
 ALTER EXTENSION pldbgapi ADD FUNCTION pldbg_wait_for_breakpoint( session INTEGER );
 ALTER EXTENSION pldbgapi ADD FUNCTION pldbg_wait_for_target( session INTEGER );
 ALTER EXTENSION pldbgapi ADD FUNCTION pldbg_get_target_info( signature TEXT, targetType "char" );
+
+DO $do$
+
+declare
+  isedb bool;
+begin
+
+  isedb = (SELECT version() LIKE 'EnterpriseDB%');
+
+  -- Add a couple of EDB specific functions
+  IF isedb THEN
+    ALTER EXTENSION pldbgapi ADD edb_oid_debug( functionOID oid );
+    ALTER EXTENSION pldbgapi ADD pldbg_get_pkg_cons( packageOID oid );
+  END IF;
+
+$do$;

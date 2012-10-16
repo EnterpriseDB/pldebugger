@@ -58,7 +58,7 @@ CREATE TYPE targetinfo AS ( target OID, schema OID, nargs INT, argTypes oidvecto
   -- Oracle-compatible CREATE TRIGGER syntax. If the function belongs to a
   -- package, 'pkg' is the package's OID, or 0 otherwise.
   --
-  -- 'argDefVals' is a representation of the function's argument DEFAULTs. 
+  -- 'argDefVals' is a representation of the function's argument DEFAULTs.
   -- That would be nice to have on PostgreSQL as well. Unfortunately our
   -- current implementation relies on an EDB-only function to get that
   -- information, so we cannot just use it as is. TODO: rewrite that using
@@ -122,7 +122,7 @@ $create_stmt$
          0::oid AS pkg,
 	 NULL::text[] AS argdefvals
 $create_stmt$;
-END IF;  
+END IF;
   -- End of conditional part
 
   createstmt := createstmt ||
@@ -139,5 +139,17 @@ $$ LANGUAGE SQL;
 $create_stmt$;
 
   execute createstmt;
+
+-- Add a couple of EDB specific functions
+IF isedb THEN
+   CREATE FUNCTION edb_oid_debug(functionOID oid) RETURNS integer AS $$
+     select pldbg_oid_debug($1);
+   $$ LANGUAGE SQL;
+
+   CREATE FUNCTION pldbg_get_pkg_cons(packageOID oid) RETURNS oid AS $$
+     select oid from pg_proc where pronamespace=$1 and proname='cons';
+   $$ LANGUAGE SQL;
+END IF;
+
 end;
 $do$;
