@@ -43,6 +43,11 @@
 #include "pldebugger.h"
 #include "dbgcomm.h"
 
+/* Include header for GETSTRUCT */
+#if (PG_VERSION_NUM >= 90300)
+#include "access/htup_details.h"
+#endif
+
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
 
 #define	TARGET_PROTO_VERSION	"1.0"
