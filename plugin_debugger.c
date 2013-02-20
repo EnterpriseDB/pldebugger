@@ -768,7 +768,7 @@ bool breakpointsForFunction( Oid funcOid )
 static bool handle_socket_error(void)
 {
 	int		err;
-	bool	abort = TRUE;
+	bool	fatal_err = TRUE;
 
 #ifdef WIN32
 		err = WSAGetLastError();
@@ -847,14 +847,14 @@ static bool handle_socket_error(void)
 			case WSAEHOSTDOWN:
 			case WSAECONNREFUSED:
 			case WSAECONNRESET:		
-				abort = TRUE;
+				fatal_err = TRUE;
 				break;
 			
 			default:
 				;
 		}
 
-		if(abort)
+		if(fatal_err)
 		{
 			LPVOID lpMsgBuf;
 			FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,	NULL,err,
@@ -875,7 +875,7 @@ static bool handle_socket_error(void)
 			case ECONNREFUSED:
 			case EPIPE:
 			case ENOTCONN:
-				abort =	TRUE;
+				fatal_err = TRUE;
 				break;
 				
 			case ENOTSOCK:
@@ -887,7 +887,7 @@ static bool handle_socket_error(void)
 				break;
 		}
 		
-		if(abort)
+		if(fatal_err)
 		{
 			if(( err ) && ( err != EPIPE ))
 				elog(COMMERROR, "%s", strerror(err)); 
@@ -898,7 +898,7 @@ static bool handle_socket_error(void)
 		errno = err;
 #endif
 		
-	return abort;
+	return fatal_err;
 }
 
 /*
