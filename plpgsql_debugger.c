@@ -36,6 +36,11 @@
 
 #include "pldebugger.h"
 
+/* Include header for GETSTRUCT */
+#if (PG_VERSION_NUM >= 90300)
+#include "access/htup_details.h"
+#endif
+
 /*
  * We use a var_value structure to record  a little extra information about
  * each variable. 

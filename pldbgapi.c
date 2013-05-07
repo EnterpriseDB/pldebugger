@@ -111,6 +111,11 @@
 #include "globalbp.h"
 #include "dbgcomm.h"
 
+/* Include header for GETSTRUCT */
+#if (PG_VERSION_NUM >= 90300)
+#include "access/htup_details.h"
+#endif
+
 /*
  * Let the PG module loader know that we are compiled against
  * the right version of the PG header files
