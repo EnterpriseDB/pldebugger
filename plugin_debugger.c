@@ -326,6 +326,18 @@ void dbg_send( const char *fmt, ... )
 	for (;;)
 	{
 		va_list	args;
+#if (PG_VERSION_NUM >= 90400)
+		int			needed;
+
+		va_start(args, fmt);
+		needed = appendStringInfoVA(&result, fmt, args);
+		va_end(args);
+
+		if (needed == 0)
+			break;
+
+		enlargeStringInfo(&result, needed);
+#else
 		bool	success;
 
 		va_start(args, fmt);
@@ -336,6 +348,7 @@ void dbg_send( const char *fmt, ... )
 			break;
 
 		enlargeStringInfo(&result, result.maxlen);
+#endif
 	}
 
 	data = result.data;
