@@ -83,6 +83,17 @@ typedef enum
 	CONNECT_UNKNOWN		/* Must already be connected 									*/
 } eConnectType;
 
+/* Global breakpoint data. */
+typedef struct
+{
+#if (PG_VERSION_NUM >= 90600)
+	int		tranche_id;
+	LWLock	lock;
+#else
+	LWLockId	lockid;
+#endif
+} GlobalBreakpointData;
+
 /**********************************************************************
  * Local (static) variables
  **********************************************************************/
@@ -1320,9 +1331,8 @@ static void reserveBreakpoints( void )
 	breakcount_hash_size = hash_estimate_size(globalBreakpointCount, sizeof(BreakCount));
 
 	RequestAddinShmemSpace( add_size( breakpoint_hash_size, breakcount_hash_size ));
-#if (PG_VERSION_NUM >= 90600)
-	RequestNamedLWLockTranche( "pldebugger", 1 );
-#else
+	RequestAddinShmemSpace(sizeof(GlobalBreakpointData));
+#if (PG_VERSION_NUM < 90600)
 	RequestAddinLWLocks( 1 );
 #endif
 }
@@ -1356,55 +1366,61 @@ void
 initGlobalBreakpoints(void)
 {
 	bool   	  		found;
-	LWLockId	   *lockId;
 	int				tableEntries = globalBreakpointCount;
+	GlobalBreakpointData   *gbpd;
+	HASHCTL breakpointCtl = {0};
+	HASHCTL breakcountCtl = {0};
 
-	if(( lockId = ((LWLockId *)ShmemInitStruct( "Global Breakpoint LockId", sizeof( LWLockId ), &found ))) == NULL )
+	gbpd = ShmemInitStruct("Global Breakpoint Data",
+						   sizeof(GlobalBreakpointData), &found);
+	if (gbpd == NULL)
 		elog(ERROR, "out of shared memory");
-	else
-	{
-		HASHCTL breakpointCtl = {0};
-		HASHCTL breakcountCtl = {0};
 
-		/*
-		 * Request a LWLock, store the ID in breakpointLock and store the ID
-		 * in shared memory so other processes can find it later.
-		 */
-		if (!found)
-		{
 #if (PG_VERSION_NUM >= 90600)
-			*lockId = breakpointLock = &(GetNamedLWLockTranche("pldebugger"))->lock;
-#else
-			*lockId = breakpointLock = LWLockAssign();
-#endif
-		}
-		else
-			breakpointLock = *lockId;
-
-		/*
-		 * Now create a shared-memory hash to hold our global breakpoints
-		 */
-		breakpointCtl.keysize   = sizeof(BreakpointKey);
-		breakpointCtl.entrysize = sizeof(Breakpoint);
-		breakpointCtl.hash 	  	= tag_hash;
-
-		globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
-
-		if (!globalBreakpoints)
-			elog(FATAL, "could not initialize global breakpoints hash table");
-
-		/*
-		 * And create a shared-memory hash to hold our global breakpoint counts
-		 */
-		breakcountCtl.keysize   = sizeof(BreakCountKey);
-		breakcountCtl.entrysize = sizeof(BreakCount);
-		breakcountCtl.hash    	= tag_hash;
-
-		globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
-
-		if (!globalBreakCounts)
-			elog(FATAL, "could not initialize global breakpoints count hash table");
+	if (!found)
+	{
+		gbpd->tranche_id = LWLockNewTrancheId();
+		LWLockInitialize(&gbpd->lock, gbpd->tranche_id);
 	}
+	{
+		static LWLockTranche tranche;
+
+		tranche.name = "pldebugger";
+		tranche.array_base = &gbpd->lock;
+		tranche.array_stride = sizeof(LWLock);
+		LWLockRegisterTranche(gbpd->tranche_id, &tranche);
+
+		breakpointLock = &gbpd->lock;
+	}
+#else
+	if (!found)
+		gbpd->lockid = LWLockAssign();
+	breakpointLock = gbpd->lockid;
+#endif
+
+	/*
+	 * Now create a shared-memory hash to hold our global breakpoints
+	 */
+	breakpointCtl.keysize   = sizeof(BreakpointKey);
+	breakpointCtl.entrysize = sizeof(Breakpoint);
+	breakpointCtl.hash 	  	= tag_hash;
+
+	globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
+
+	if (!globalBreakpoints)
+		elog(FATAL, "could not initialize global breakpoints hash table");
+
+	/*
+	 * And create a shared-memory hash to hold our global breakpoint counts
+	 */
+	breakcountCtl.keysize   = sizeof(BreakCountKey);
+	breakcountCtl.entrysize = sizeof(BreakCount);
+	breakcountCtl.hash    	= tag_hash;
+
+	globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
+
+	if (!globalBreakCounts)
+		elog(FATAL, "could not initialize global breakpoints count hash table");
 }
 
 
