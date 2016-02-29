@@ -1320,7 +1320,11 @@ static void reserveBreakpoints( void )
 	breakcount_hash_size = hash_estimate_size(globalBreakpointCount, sizeof(BreakCount));
 
 	RequestAddinShmemSpace( add_size( breakpoint_hash_size, breakcount_hash_size ));
+#if (PG_VERSION_NUM >= 90600)
+	RequestNamedLWLockTranche( "pldebugger", 1 );
+#else
 	RequestAddinLWLocks( 1 );
+#endif
 }
 
 static void
@@ -1367,7 +1371,13 @@ initGlobalBreakpoints(void)
 		 * in shared memory so other processes can find it later.
 		 */
 		if (!found)
+		{
+#if (PG_VERSION_NUM >= 90600)
+			*lockId = breakpointLock = &(GetNamedLWLockTranche("pldebugger"))->lock;
+#else
 			*lockId = breakpointLock = LWLockAssign();
+#endif
+		}
 		else
 			breakpointLock = *lockId;
 
