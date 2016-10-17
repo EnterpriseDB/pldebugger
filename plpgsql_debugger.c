@@ -380,7 +380,8 @@ plpgsql_select_frame(ErrorContextCallback *frame)
  *  named variables index withing estate->datums[]
  */
 
-static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const char * var_name, int lineno, int * index )
+static PLpgSQL_var *
+find_var_by_name(const PLpgSQL_execstate * estate, const char * var_name, int lineno, int * index)
 {
     dbg_ctx          * dbg_info = (dbg_ctx *)estate->plugin_info;
     PLpgSQL_function * func     = dbg_info->func;
@@ -414,7 +415,9 @@ static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const c
 
 }
 
-static PLpgSQL_datum * find_datum_by_name( const PLpgSQL_execstate * frame, const char * var_name, int lineNo, int * index )
+static PLpgSQL_datum *
+find_datum_by_name(const PLpgSQL_execstate *frame, const char *var_name,
+				   int lineNo, int *index)
 {
 	dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
 	int		  i;
@@ -509,13 +512,14 @@ static PLpgSQL_datum * find_datum_by_name( const PLpgSQL_execstate * frame, cons
 
 /*
  * ---------------------------------------------------------------------
- * dbg_printvar()
+ * print_var()
  *
  *	This function will print (that is, send to the debugger client) the
  *  type and value of the given variable.
  */
-
-static void print_var( const PLpgSQL_execstate * frame, const char * var_name, int lineno, const PLpgSQL_var * tgt )
+static void
+print_var(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
+		  const PLpgSQL_var *tgt)
 {
     char	     	 * extval;
     HeapTuple	       typeTup;
@@ -561,13 +565,16 @@ static void print_var( const PLpgSQL_execstate * frame, const char * var_name, i
     ReleaseSysCache( typeTup );
 }
 
-static void print_row( const PLpgSQL_execstate * frame, const char * var_name, int lineno, const PLpgSQL_row * tgt )
+static void
+print_row(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
+		  const PLpgSQL_row * tgt)
 {
-
-
+	/* XXX.  Shouldn't there be some code here? */
 }
 
-static void print_rec( const PLpgSQL_execstate * frame, const char * var_name, int lineno, const PLpgSQL_rec * tgt )
+static void
+print_rec(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
+		  const PLpgSQL_rec *tgt)
 {
 	int		attNo;
 
@@ -585,14 +592,16 @@ static void print_rec( const PLpgSQL_execstate * frame, const char * var_name, i
 	}
 }
 
-static void print_recfield( const PLpgSQL_execstate * frame, const char * var_name, int lineno, const PLpgSQL_recfield * tgt )
+static void
+print_recfield(const PLpgSQL_execstate *frame, const char *var_name,
+			   int lineno, const PLpgSQL_recfield *tgt)
 {
-
-
+	/* XXX.  Shouldn't there be some code here? */
 }
 
 static void
-plpgsql_print_var(ErrorContextCallback *frame, const char * var_name, int lineno)
+plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
+				  int lineno)
 {
 	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
 	PLpgSQL_variable * generic = NULL;
@@ -642,8 +651,8 @@ plpgsql_print_var(ErrorContextCallback *frame, const char * var_name, int lineno
  *  declared.  This function detects duplicate names and marks duplicates
  *  in our private symbol table.
  */
-
-static void mark_duplicate_names( const PLpgSQL_execstate * estate, int var_no )
+static void
+mark_duplicate_names(const PLpgSQL_execstate *estate, int var_no)
 {
     dbg_ctx * dbg_info = (dbg_ctx *)estate->plugin_info;
 
@@ -700,8 +709,8 @@ static void mark_duplicate_names( const PLpgSQL_execstate * estate, int var_no )
  *	we need to figure out which names are unique and which
  *	are duplicates.
  */
-
-static void completeFrame( PLpgSQL_execstate * frame )
+static void
+completeFrame(PLpgSQL_execstate *frame)
 {
     dbg_ctx 		 * dbg_info = (dbg_ctx *)frame->plugin_info;
     PLpgSQL_function * func     = dbg_info->func;
@@ -743,8 +752,8 @@ static void completeFrame( PLpgSQL_execstate * frame )
  *
  *	 The argument names are returned as an array of string pointers
  */
-
-static char ** fetchArgNames( PLpgSQL_function * func, int * nameCount )
+static char **
+fetchArgNames(PLpgSQL_function *func, int *nameCount)
 {
 	HeapTuple	tup;
 	Datum		argnamesDatum;
@@ -782,7 +791,8 @@ static char ** fetchArgNames( PLpgSQL_function * func, int * nameCount )
 	return( result );
 }
 
-static char * get_text_val( PLpgSQL_var * var, char ** name, char ** type )
+static char *
+get_text_val(PLpgSQL_var *var, char **name, char **type)
 {
 	HeapTuple	       typeTup;
     Form_pg_type       typeStruct;
@@ -834,7 +844,8 @@ plpgsql_get_func_oid(ErrorContextCallback *frame)
 	return dbg_info->func->fn_oid;
 }
 
-static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
+static void
+dbg_startup(PLpgSQL_execstate *estate, PLpgSQL_function *func)
 {
 	if( func == NULL )
 	{
@@ -854,8 +865,8 @@ static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 	initialize_plugin_info(estate, func);
 }
 
-static void initialize_plugin_info( PLpgSQL_execstate * estate,
-									PLpgSQL_function * func )
+static void
+initialize_plugin_info(PLpgSQL_execstate *estate, PLpgSQL_function *func)
 {
     dbg_ctx * dbg_info;
 
@@ -922,7 +933,7 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
 
 /*
  * ---------------------------------------------------------------------
- * do_deposit()
+ * plpgsql_do_deposit()
  *
  *  This function handles the 'deposit' feature - that is, this function
  *  sets a given PL variable to a new value, supplied by the client.
@@ -938,8 +949,9 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
  *
  * Returns true on success, false on failure.
  */
-
-static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name, int lineno, const char *value)
+static bool
+plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
+				   int lineno, const char *value)
 {
 	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
 	dbg_ctx       *dbg_info   = estate->plugin_info;
@@ -1093,8 +1105,8 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
  *  to indicate whether this variable is hidden or visible - that way,
  *  only have to do the expensive stuff once per invocation.
  */
-
-static bool is_datum_visible( PLpgSQL_datum * datum )
+static bool
+is_datum_visible(PLpgSQL_datum *datum)
 {
 	static const char * hidden_variables[] =
 	{
@@ -1170,8 +1182,8 @@ static bool is_datum_visible( PLpgSQL_datum * datum )
  *  we do the slow work in is_datum_visible() and simply check the results
  *  here.
  */
-
-static bool is_var_visible( PLpgSQL_execstate * frame, int var_no )
+static bool
+is_var_visible(PLpgSQL_execstate *frame, int var_no)
 {
     dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
 
@@ -1215,14 +1227,15 @@ plpgsql_send_cur_line(ErrorContextCallback *frame)
  *	Returns true if the given statement is the first statement in the
  *  given function.
  */
-
-static bool isFirstStmt( PLpgSQL_stmt * stmt, PLpgSQL_function * func )
+static bool
+isFirstStmt(PLpgSQL_stmt *stmt, PLpgSQL_function *func)
 {
 	if( stmt == linitial( func->action->body ))
 		return( TRUE );
 	else
 		return( FALSE );
 }
+
 /*
  * ---------------------------------------------------------------------
  * dbg_newstmt()
@@ -1240,8 +1253,8 @@ static bool isFirstStmt( PLpgSQL_stmt * stmt, PLpgSQL_function * func )
  *		  if you're running PL/pgSQL code without a debugger, you notice no
  *		  performance penalty.
  */
-
-static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
+static void
+dbg_newstmt(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
 {
 	PLpgSQL_execstate * frame = estate;
 
@@ -1370,8 +1383,6 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 				dbg_info->stepping = FALSE;
 		}
 	}
-
-	return;
 }
 
 /* ---------------------------------------------------------------------
@@ -1380,7 +1391,8 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
  *	determine whether datum is NULL or not.
  *	TODO: consider datatypes other than PLPGSQL_DTYPE_VAR as well
  */
-static bool datumIsNull(PLpgSQL_datum *datum)
+static bool
+datumIsNull(PLpgSQL_datum *datum)
 {
 	switch (datum->dtype)
 	{
