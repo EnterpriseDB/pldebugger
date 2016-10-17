@@ -823,18 +823,6 @@ get_text_val(PLpgSQL_var *var, char **name, char **type)
 	return( text_value );
 }
 
-/*
- * ---------------------------------------------------------------------
- * sendBreakpoints()
- *
- *	This function sends a list of breakpoints to the proxy process.
- *
- *	We only send the breakpoints defined in the given frame.
- *
- *	For now, we maintain our own private list of breakpoints -
- *	later, we'll use the same list managed by the CREATE/
- *	DROP BREAKPOINT commands.
- */
 static Oid
 plpgsql_get_func_oid(ErrorContextCallback *frame)
 {
