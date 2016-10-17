@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2004-2013 EnterpriseDB Corporation. All Rights Reserved.
  *
- * Licensed under the Artistic License, see 
+ * Licensed under the Artistic License, see
  *		http://www.opensource.org/licenses/artistic-license.php
  * for full details
  *
@@ -43,7 +43,7 @@
 
 /*
  * We use a var_value structure to record  a little extra information about
- * each variable. 
+ * each variable.
  */
 
 typedef struct
@@ -150,7 +150,7 @@ plpgsql_frame_belongs_to_me(ErrorContextCallback *frame)
 
 /*
  * plpgsql_send_stack_frame()
- * 
+ *
  * This function sends information about a single stack frame to the debugger
  * client.  This function is called by send_stack() whenever send_stack()
  * finds a PL/pgSQL call in the stack (remember, the call stack may contain
@@ -200,14 +200,14 @@ plpgsql_send_stack_frame(ErrorContextCallback *frame)
 			value = pstrdup( "" );
 		else
 			value = get_text_val((PLpgSQL_var*)argDatum, NULL, NULL );
-		
+
 		if( argNames && argNames[arg] && argNames[arg][0] )
 			appendStringInfo( result,  "%s%s=%s", delimiter, argNames[arg], value );
 		else
 			appendStringInfo( result,  "%s$%d=%s", delimiter, arg+1, value );
 
 		pfree( value );
-			
+
 		delimiter = ", ";
 	}
 
@@ -264,15 +264,15 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 					}
 
 					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
-							  name, 
+							  name,
 							  isArg ? 'A' : 'L',
-							  var->lineno,  
+							  var->lineno,
 							  dbg_info->symbols[i].duplicate_name ? 'f' : 't',
-							  var->isconst ? 't':'f', 
-							  var->notnull ? 't':'f', 
+							  var->isconst ? 't':'f',
+							  var->notnull ? 't':'f',
 							  var->datatype ? var->datatype->typoid : InvalidOid,
 							  val );
-				  
+
 					break;
 				}
 #if 0
@@ -289,11 +289,11 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 						for( att = 0; att < rec->tupdesc->natts; ++att )
 						{
 							typeName = SPI_gettype( rec->tupdesc, att + 1 );
-	
+
 							dbg_send( "o:%s.%s:%d:%d:%d:%d:%s\n",
-									  rec->refname, NameStr( rec->tupdesc->attrs[att]->attname ), 
+									  rec->refname, NameStr( rec->tupdesc->attrs[att]->attname ),
 									  0, rec->lineno, 0, rec->tupdesc->attrs[att]->attnotnull, typeName ? typeName : "" );
-	
+
 							if( typeName )
 								pfree( typeName );
 						}
@@ -330,15 +330,15 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 						val = get_text_val( var, NULL, NULL );
 
 					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
-							  name, 
+							  name,
 							  'P',				/* variable class - P means package var */
-							  var->lineno,  
+							  var->lineno,
 							  'f',				/* duplicate name?						*/
-							  var->isconst ? 't':'f', 
-							  var->notnull ? 't':'f', 
+							  var->isconst ? 't':'f',
+							  var->notnull ? 't':'f',
 							  var->datatype ? var->datatype->typoid : InvalidOid,
 							  val );
-				  
+
 					break;
 				}
 			}
@@ -372,11 +372,11 @@ plpgsql_select_frame(ErrorContextCallback *frame)
  * ---------------------------------------------------------------------
  * find_var_by_name()
  *
- *	This function returns the PLpgSQL_var pointer that corresponds to 
+ *	This function returns the PLpgSQL_var pointer that corresponds to
  *	named variable (var_name).  If the named variable can't be found,
  *  find_var_by_name() returns NULL.
  *
- *  If the index is non-NULL, this function will set *index to the 
+ *  If the index is non-NULL, this function will set *index to the
  *  named variables index withing estate->datums[]
  */
 
@@ -387,13 +387,13 @@ static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const c
     int                i;
 
 	for( i = 0; i < func->ndatums; i++ )
-	{	
-		PLpgSQL_var * var = (PLpgSQL_var *) estate->datums[i];      
-		size_t 		  len = strlen(var->refname);	
-		
-		if(len != strlen(var_name)) 
+	{
+		PLpgSQL_var * var = (PLpgSQL_var *) estate->datums[i];
+		size_t 		  len = strlen(var->refname);
+
+		if(len != strlen(var_name))
 			continue;
-		
+
 		if( strncmp( var->refname, var_name, len) == 0 )
 		{
 		 	if(( lineno == -1 ) || ( var->lineno == lineno ))
@@ -403,7 +403,7 @@ static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const c
 				if( index )
 					*index = i;
 			}
-			
+
 			return( var );
 		}
 	}
@@ -418,7 +418,7 @@ static PLpgSQL_datum * find_datum_by_name( const PLpgSQL_execstate * frame, cons
 {
 	dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
 	int		  i;
-		
+
 #if INCLUDE_PACKAGE_SUPPORT
 
 	if( var_name[0] == '@' )
@@ -495,7 +495,7 @@ static PLpgSQL_datum * find_datum_by_name( const PLpgSQL_execstate * frame, cons
 		if( strcmp( var_name, datumName ) == 0 )
 		{
 			if( lineNo == -1 || lineNo == datumLineno )
-			{	
+			{
 				if( index )
 					*index = i;
 
@@ -511,7 +511,7 @@ static PLpgSQL_datum * find_datum_by_name( const PLpgSQL_execstate * frame, cons
  * ---------------------------------------------------------------------
  * dbg_printvar()
  *
- *	This function will print (that is, send to the debugger client) the 
+ *	This function will print (that is, send to the debugger client) the
  *  type and value of the given variable.
  */
 
@@ -541,7 +541,7 @@ static void print_var( const PLpgSQL_execstate * frame, const char * var_name, i
 		dbg_send( "v:%s(%d):***can't find type\n", var_name, lineno );
 		return;
     }
-    
+
     typeStruct = (Form_pg_type)GETSTRUCT( typeTup );
 
 	/* Now invoke the output function to convert the variable into a null-terminated string */
@@ -570,7 +570,7 @@ static void print_row( const PLpgSQL_execstate * frame, const char * var_name, i
 static void print_rec( const PLpgSQL_execstate * frame, const char * var_name, int lineno, const PLpgSQL_rec * tgt )
 {
 	int		attNo;
-	
+
 	if (tgt->tupdesc == NULL)
 		return;
 
@@ -633,12 +633,12 @@ plpgsql_print_var(ErrorContextCallback *frame, const char * var_name, int lineno
  *	In a PL/pgSQL function/procedure you can declare many variables with
  *  the same name as long as the name is unique within a scope.  The PL
  *	compiler co-mingles all variables into a single symbol table without
- *  indicating (at run-time) when a variable comes into scope.  
+ *  indicating (at run-time) when a variable comes into scope.
  *
  *  When we display a variable to the user, we want to show an undecorated
- *  name unless the given variable has duplicate declarations (in nested 
+ *  name unless the given variable has duplicate declarations (in nested
  *  scopes).  If we detect that a variable has duplicate declarations, we
- *	decorate the name with the line number at which each instance is 
+ *	decorate the name with the line number at which each instance is
  *  declared.  This function detects duplicate names and marks duplicates
  *  in our private symbol table.
  */
@@ -675,7 +675,7 @@ static void mark_duplicate_names( const PLpgSQL_execstate * estate, int var_no )
 			{
 				if( estate->datums[i]->dtype != PLPGSQL_DTYPE_VAR )
 					continue;
-				
+
 				var = (PLpgSQL_var *)estate->datums[i];
 
 				if( strcmp( var_name, var->refname ) == 0 )
@@ -694,10 +694,10 @@ static void mark_duplicate_names( const PLpgSQL_execstate * estate, int var_no )
  *
  *	This function ensures that the given execution frame contains
  *	all of the information we need in order to debug it.  In particular,
- *	we create an array that extends the frame->datums[] array.  
- *	We need to know which variables should be visible to the 
- *	debugger client (we hide some of them by convention) and 
- *	we need to figure out which names are unique and which 
+ *	we create an array that extends the frame->datums[] array.
+ *	We need to know which variables should be visible to the
+ *	debugger client (we hide some of them by convention) and
+ *	we need to figure out which names are unique and which
  *	are duplicates.
  */
 
@@ -717,7 +717,7 @@ static void completeFrame( PLpgSQL_execstate * frame )
 
 			/*
 			 * Note: in SPL, we hide a few variables from the debugger since
-			 *       they are internally generated (that is, not declared by 
+			 *       they are internally generated (that is, not declared by
 			 *		 the user).  Decide whether this particular variable should
 			 *       be visible to the debugger client.
 			 */
@@ -736,9 +736,9 @@ static void completeFrame( PLpgSQL_execstate * frame )
 
 /* ------------------------------------------------------------------
  * fetchArgNames()
- * 
- *   This function returns the name of each argument for the given 
- *   function or procedure. If the function/procedure does not have 
+ *
+ *   This function returns the name of each argument for the given
+ *   function or procedure. If the function/procedure does not have
  *	 named arguments, this function returns NULL
  *
  *	 The argument names are returned as an array of string pointers
@@ -820,7 +820,7 @@ static char * get_text_val( PLpgSQL_var * var, char ** name, char ** type )
  *	This function sends a list of breakpoints to the proxy process.
  *
  *	We only send the breakpoints defined in the given frame.
- *	
+ *
  *	For now, we maintain our own private list of breakpoints -
  *	later, we'll use the same list managed by the CREATE/
  *	DROP BREAKPOINT commands.
@@ -838,8 +838,8 @@ static void dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func )
 {
 	if( func == NULL )
 	{
-		/* 
-		 * In general, this should never happen, but it seems to in the 
+		/*
+		 * In general, this should never happen, but it seems to in the
 		 * case of package constructors
 		 */
 		estate->plugin_info = NULL;
@@ -862,7 +862,7 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
 	/* Allocate a context structure and record the address in the estate */
     estate->plugin_info = dbg_info = (dbg_ctx *) palloc( sizeof( dbg_ctx ));
 
-	/* 
+	/*
 	 * As soon as we hit the first statement, we'll allocate space for each
 	 * local variable. For now, we set symbols to NULL so we know to report all
 	 * variables the next time we stop...
@@ -927,10 +927,10 @@ static void initialize_plugin_info( PLpgSQL_execstate * estate,
  *  This function handles the 'deposit' feature - that is, this function
  *  sets a given PL variable to a new value, supplied by the client.
  *
- *	do_deposit() is called when you type a new value into a variable in 
+ *	do_deposit() is called when you type a new value into a variable in
  *  the local-variables window.
  *
- *  NOTE: For the convenience of the user, we first assume that the 
+ *  NOTE: For the convenience of the user, we first assume that the
  *		  provided value is an expression.  If it doesn't evaluate,
  *		  we convert the value into a literal by surrounding it with
  *		  single quotes.  That may be surprising if you happen to make
@@ -966,10 +966,10 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 	sprintf( select, "SELECT %s", value );
 
     /*
-	 * Note: we must create a dynamically allocated PLpgSQL_expr here - we 
+	 * Note: we must create a dynamically allocated PLpgSQL_expr here - we
 	 *       can't create one on the stack because exec_assign_expr()
 	 *       links this expression into a list (active_simple_exprs) and
-	 *       this expression must survive until the end of the current 
+	 *       this expression must survive until the end of the current
 	 *	     transaction so we don't free it out from under spl_plpgsql_xact_cb()
 	 */
 
@@ -999,13 +999,13 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 		MemoryContextSwitchTo( curContext );
 		CurrentResourceOwner = curOwner;
 
-		SPI_restore_connection();		
+		SPI_restore_connection();
 
 		/* That worked, don't try again */
 		retval = true;
 	}
 	PG_CATCH();
-	{	
+	{
 		MemoryContextSwitchTo( curContext );
 
 		FlushErrorState();
@@ -1055,12 +1055,12 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 			MemoryContextSwitchTo( curContext );
 			CurrentResourceOwner = curOwner;
 
-			SPI_restore_connection();		
+			SPI_restore_connection();
 
 			retval = true;
 		}
 		PG_CATCH();
-		{	
+		{
 			MemoryContextSwitchTo( curContext );
 
 			FlushErrorState();
@@ -1086,8 +1086,8 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
  * ---------------------------------------------------------------------
  * is_datum_visible()
  *
- *	This function determines whether the given datum is 'visible' to the 
- *  debugger client.  We want to hide a few undocumented/internally 
+ *	This function determines whether the given datum is 'visible' to the
+ *  debugger client.  We want to hide a few undocumented/internally
  *  generated variables from the user - this is the function that hides
  *  them.  We set a flag in the symbols entry for this datum
  *  to indicate whether this variable is hidden or visible - that way,
@@ -1096,7 +1096,7 @@ static bool plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name
 
 static bool is_datum_visible( PLpgSQL_datum * datum )
 {
-	static const char * hidden_variables[] = 
+	static const char * hidden_variables[] =
 	{
 		"found",
 		"rowcount",
@@ -1107,10 +1107,10 @@ static bool is_datum_visible( PLpgSQL_datum * datum )
 	};
 
 	/*
-	 * All of the hidden variables are scalars at the moment so 
+	 * All of the hidden variables are scalars at the moment so
 	 * assume that anything else is visible regardless of name
 	 */
-	
+
 	if( datum->dtype != PLPGSQL_DTYPE_VAR )
 		return( TRUE );
 	else
@@ -1132,9 +1132,9 @@ static bool is_datum_visible( PLpgSQL_datum * datum )
 		}
 
 		/*
-		 * The SPL pre-processor generates a few variable names for 
+		 * The SPL pre-processor generates a few variable names for
 		 * DMBS.PUTLINE statements - we want to hide those variables too.
-		 * The generated variables are of the form 'txtnnn...' where 
+		 * The generated variables are of the form 'txtnnn...' where
 		 * 'nnn...' is a sequence of one or more digits.
 		 */
 
@@ -1164,9 +1164,9 @@ static bool is_datum_visible( PLpgSQL_datum * datum )
  * ---------------------------------------------------------------------
  * is_var_visible()
  *
- *	This function determines whether the given variable is 'visible' to the 
- *  debugger client. We hide some variables from the user (see the 
- *  is_datum_visible() function for more info).  This function is quick - 
+ *	This function determines whether the given variable is 'visible' to the
+ *  debugger client. We hide some variables from the user (see the
+ *  is_datum_visible() function for more info).  This function is quick -
  *  we do the slow work in is_datum_visible() and simply check the results
  *  here.
  */
@@ -1186,7 +1186,7 @@ static bool is_var_visible( PLpgSQL_execstate * frame, int var_no )
  * plpgsql_send_cur_line()
  *
  * This function sends the current position to the debugger client. We
- * send the function's OID, xmin, cmin, and the current line number 
+ * send the function's OID, xmin, cmin, and the current line number
  * (we're telling the client which line of code we're about to execute).
  */
 static void
@@ -1212,7 +1212,7 @@ plpgsql_send_cur_line(ErrorContextCallback *frame)
  * ---------------------------------------------------------------------
  * isFirstStmt()
  *
- *	Returns true if the given statement is the first statement in the 
+ *	Returns true if the given statement is the first statement in the
  *  given function.
  */
 
@@ -1228,14 +1228,14 @@ static bool isFirstStmt( PLpgSQL_stmt * stmt, PLpgSQL_function * func )
  * dbg_newstmt()
  *
  *	The PL/pgSQL executor calls plpgsql_dbg_newstmt() just before executing each
- *	statement.  
+ *	statement.
  *
  *	This function is the heart of the debugger.  If you're single-stepping,
  *	or you hit a breakpoint, plpgsql_dbg_newstmt() sends a message to the debugger
- *  client indicating the current line and then waits for a command from 
+ *  client indicating the current line and then waits for a command from
  *	the user.
  *
- *	NOTE: it is very important that this function should impose negligible 
+ *	NOTE: it is very important that this function should impose negligible
  *	      overhead when a debugger client is *not* attached.  In other words
  *		  if you're running PL/pgSQL code without a debugger, you notice no
  *		  performance penalty.
@@ -1275,7 +1275,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 		if( sigsetjmp( client_lost.m_savepoint, 1 ) != 0 )
 		{
 			/*
-			 *  The connection to the debugger client has slammed shut - 
+			 *  The connection to the debugger client has slammed shut -
 			 *	just pretend like there's no debugger attached and return
 			 *
 			 *	NOTE: we no longer have a connection to the debugger proxy -
@@ -1287,7 +1287,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			 *
 			 *		  If, however, we hit a breakpoint again, we'll stop and
 			 *		  wait for another debugger proxy to connect to us.  If
-			 *		  that's not the behavior you're looking for, you can 
+			 *		  that's not the behavior you're looking for, you can
 			 *		  drop the breakpoint, or call free_function_breakpoints()
 			 *		  here to get rid of all breakpoints in this backend.
 			 */
@@ -1307,7 +1307,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 
 		if( !attach_to_proxy( breakpoint ))
 		{
-			/* 
+			/*
 			 * Can't attach to the proxy, maybe we found a stale breakpoint?
 			 * That can happen if you set a global breakpoint on a function,
 			 * invoke that function from a client application, debug the target
@@ -1322,7 +1322,7 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 				BreakpointDelete( breakpointScope, &(breakpoint->key));
 
 			/*
-			 * In any case, if we don't have a proxy to work with, we can't 
+			 * In any case, if we don't have a proxy to work with, we can't
 			 * do any debugging so give up.
 			 */
 			pfree( frame->plugin_info );
@@ -1342,14 +1342,14 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 		 * want to wait for the user to STEP across it. Remember, the user won't
 		 * see the RETURN statement in the source-code listing for his function.
 		 *
-		 * Fortunately, the automatic RETURN statement has a line-number of 0 
+		 * Fortunately, the automatic RETURN statement has a line-number of 0
 		 * so it's easy to spot.
 		 */
 		if( stmt->lineno == 0 )
 			return;
 
 		/*
-		 * If we're in step mode, tell the debugger client, read a command from the client and 
+		 * If we're in step mode, tell the debugger client, read a command from the client and
 		 * execute the command
 		 */
 
@@ -1360,8 +1360,8 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 			 */
 			completeFrame( frame );
 
-			/* 
-			 * We're in single-step mode (or at a breakpoint) 
+			/*
+			 * We're in single-step mode (or at a breakpoint)
 			 * send the current line number to the debugger client and report any
 			 * variable modifications
 			 */
@@ -1370,13 +1370,13 @@ static void dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt )
 				dbg_info->stepping = FALSE;
 		}
 	}
-	
+
 	return;
 }
 
 /* ---------------------------------------------------------------------
  *	datumIsNull()
- *	
+ *
  *	determine whether datum is NULL or not.
  *	TODO: consider datatypes other than PLPGSQL_DTYPE_VAR as well
  */
@@ -1387,20 +1387,20 @@ static bool datumIsNull(PLpgSQL_datum *datum)
 		case PLPGSQL_DTYPE_VAR:
 		{
 			PLpgSQL_var *var = (PLpgSQL_var *) datum;
-			
+
 			if (var->isnull)
 				return true;
 		}
 		break;
-	
-		/* other data types are not currently handled, we just return true */	
+
+		/* other data types are not currently handled, we just return true */
 		case PLPGSQL_DTYPE_REC:
 		case PLPGSQL_DTYPE_ROW:
 			return true;
-			
+
 		default:
 			return true;
 	}
-	
+
 	return false;
 }
