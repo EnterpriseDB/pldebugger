@@ -214,14 +214,6 @@ plpgsql_send_stack_frame(ErrorContextCallback *frame)
 	dbg_send( "%s", result->data );
 }
 
-
-/*
- * plpgsql_send_vars()
- *	
- * This function sends a list of variables (names, types, values...) to
- * the proxy process.  We send information about the variables defined in
- * the given frame (local variables) and parameter values.
- */
 static bool
 varIsArgument(const PLpgSQL_execstate *estate, int varNo)
 {
@@ -230,6 +222,13 @@ varIsArgument(const PLpgSQL_execstate *estate, int varNo)
 	return (varNo < dbg_info->func->fn_nargs);
 }
 
+/*
+ * plpgsql_send_vars()
+ *
+ * This function sends a list of variables (names, types, values...) to
+ * the proxy process.  We send information about the variables defined in
+ * the given frame (local variables) and parameter values.
+ */
 static void
 plpgsql_send_vars(ErrorContextCallback *frame)
 {
