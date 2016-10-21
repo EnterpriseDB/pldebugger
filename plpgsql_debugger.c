@@ -87,7 +87,7 @@ static PLpgSQL_var * find_var_by_name( const PLpgSQL_execstate * estate, const c
 static bool 		 is_datum_visible( PLpgSQL_datum * datum );
 static bool			 is_var_visible( PLpgSQL_execstate * frame, int var_no );
 static bool			 datumIsNull(PLpgSQL_datum *datum);
-static bool          varIsArgument( const PLpgSQL_execstate * frame, int varNo );
+static bool          varIsArgument(const PLpgSQL_execstate *estate, PLpgSQL_function *func, int varNo, char **p_argname);
 static char		   * get_text_val( PLpgSQL_var * var, char ** name, char ** type );
 
 #if INCLUDE_PACKAGE_SUPPORT
@@ -214,12 +214,78 @@ plpgsql_send_stack_frame(ErrorContextCallback *frame)
 	dbg_send( "%s", result->data );
 }
 
+/*
+ * varIsArgument() :
+ *
+ * Returns true if it's an argument of the function. In case the function is an
+ * EDB-SPL nested function, it returns true only if it is an argument of the
+ * current nested function; in all other cases it returns false, even if it's
+ * an argument of any of the outer nested functions in the current nested
+ * function call stack.
+ *
+ * If the variable is a *named* argument, the argument name is passed
+ * through 'p_argname'. In case of nested functions, p_argname is set if the
+ * variable name is a named argument of any of the nested functions in the
+ * current nested function call stack.
+ *
+ * varNo is the estate->datums index.
+ */
 static bool
-varIsArgument(const PLpgSQL_execstate *estate, int varNo)
+varIsArgument(const PLpgSQL_execstate *estate, PLpgSQL_function *func,
+		   int varNo, char **p_argname)
 {
-	dbg_ctx * dbg_info = (dbg_ctx *) estate->plugin_info;
+#if INCLUDE_PACKAGE_SUPPORT && (PG_VERSION_NUM >= 90600)
 
-	return (varNo < dbg_info->func->fn_nargs);
+	/*
+	 * If this variable is actually an argument of this function, return the
+	 * argument name. Such argument variables have '$n' refname, so we need to
+	 * use the function argument name if it's a named argument.
+	 */
+	if (func->fn_nallargs > 0 &&
+		varNo >= func->fn_first_argno &&
+		varNo < func->fn_first_argno + func->fn_nallargs)
+	{
+		char *argname = func->fn_argnames[varNo - func->fn_first_argno];
+
+		if (argname && argname[0])
+			*p_argname = argname;
+
+		return true;
+	}
+
+	/*
+	 * Now check if it is an argument of any of the outer functions. If yes,
+	 * we need to get the argument name in case it is a named argument.
+	 */
+	if (func->parent)
+		(void) varIsArgument(estate, func->parent, varNo, p_argname);
+
+	/* It is not an argument of the current function. */
+	return false;
+
+#else
+
+	dbg_ctx	   *dbg_info = (dbg_ctx *) estate->plugin_info;
+	bool		isArg = false;
+
+	if (varNo < dbg_info->func->fn_nargs)
+		isArg = true;
+
+	/* Get it's name if it's a named argument. */
+	if (varNo < dbg_info->argNameCount)
+	{
+		isArg = true;
+
+		if (dbg_info->argNames && dbg_info->argNames[varNo] &&
+			dbg_info->argNames[varNo][0])
+		{
+			*p_argname  = dbg_info->argNames[varNo];
+		}
+	}
+
+	return isArg;
+
+#endif
 }
 
 /*
@@ -247,21 +313,14 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 					PLpgSQL_var * var = (PLpgSQL_var *) estate->datums[i];
 					char        * val;
 					char		* name = var->refname;
-					bool		  isArg = varIsArgument( estate, i );
+					bool		  isArg;
+
+					isArg = varIsArgument(estate, dbg_info->func, i, &name);
 
 					if( datumIsNull((PLpgSQL_datum *)var ))
 						val = "NULL";
 					else
 						val = get_text_val( var, NULL, NULL );
-
-					if( i < dbg_info->argNameCount )
-					{
-						if( dbg_info->argNames && dbg_info->argNames[i] && dbg_info->argNames[i][0] )
-						{
-							name  = dbg_info->argNames[i];
-							isArg = TRUE;
-						}
-					}
 
 					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
 							  name,
@@ -472,11 +531,7 @@ find_datum_by_name(const PLpgSQL_execstate *frame, const char *var_name,
 				datumName   = var->refname;
 				datumLineno = var->lineno;
 
-				if( varIsArgument( frame, i ))
-				{
-					if( dbg_info->argNames && dbg_info->argNames[i] && dbg_info->argNames[i][0] )
-						datumName = dbg_info->argNames[i];
-				}
+				(void) varIsArgument(frame, dbg_info->func, i, &datumName);
 
 				break;
 			}
@@ -755,6 +810,14 @@ completeFrame(PLpgSQL_execstate *frame)
 static char **
 fetchArgNames(PLpgSQL_function *func, int *nameCount)
 {
+#if INCLUDE_PACKAGE_SUPPORT && (PG_VERSION_NUM >= 90600)
+	/*
+	 * Argument names are now available in func, and we anyway can't fetch from
+	 * pg_proc in case of a nested function.
+	 */
+	*nameCount = func->fn_nallargs;
+	return func->fn_argnames;
+#else
 	HeapTuple	tup;
 	Datum		argnamesDatum;
 	bool		isNull;
@@ -789,6 +852,7 @@ fetchArgNames(PLpgSQL_function *func, int *nameCount)
 	ReleaseSysCache( tup );
 
 	return( result );
+#endif
 }
 
 static char *
