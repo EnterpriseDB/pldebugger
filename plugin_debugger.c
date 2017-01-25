@@ -1383,12 +1383,16 @@ initGlobalBreakpoints(void)
 		LWLockInitialize(&gbpd->lock, gbpd->tranche_id);
 	}
 	{
+#if (PG_VERSION_NUM >= 100000)
+		LWLockRegisterTranche(gbpd->tranche_id, "pldebugger");
+#else
 		static LWLockTranche tranche;
 
 		tranche.name = "pldebugger";
 		tranche.array_base = &gbpd->lock;
 		tranche.array_stride = sizeof(LWLock);
 		LWLockRegisterTranche(gbpd->tranche_id, &tranche);
+#endif
 
 		breakpointLock = &gbpd->lock;
 	}
