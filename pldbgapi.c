@@ -81,7 +81,7 @@
  *	likely to encounter an error when you call pldbg_continue() and the
  *	target process runs to completion (without hitting another breakpoint)
  *
- * Copyright (c) 2004-2013 EnterpriseDB Corporation. All Rights Reserved.
+ * Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
  *
  * Licensed under the Artistic License, see 
  *		http://www.opensource.org/licenses/artistic-license.php
