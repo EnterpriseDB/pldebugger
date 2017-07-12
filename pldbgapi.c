@@ -210,6 +210,8 @@ static HTAB			* sessionHash;
 #define PLDBG_GET_SOURCE			"#" 		/* Followed by pkgoid:funcoid				*/
 #define PLDBG_DEPOSIT				"d"			/* Followed by var.line=value				*/
 
+#define PLDBG_STRING_MAX_LEN   128
+
 #define PROXY_API_VERSION		3			/* API version number						*/
 
 /*******************************************************************************
@@ -578,11 +580,14 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 	{
 		debugSession * session 	   = defaultSession( PG_GETARG_SESSION( 0 ));
 		int32		   frameNumber = PG_GETARG_INT32( 1 );
-		char		   frameString[12];		/* sign, 10 digits, '\0' */
+		char		   frameString[PLDBG_STRING_MAX_LEN];
 		char         * resultString;
 		Datum		   result;
 
-		sprintf( frameString, "%s %d", PLDBG_SELECT_FRAME, frameNumber );
+		snprintf(
+			frameString, PLDBG_STRING_MAX_LEN, "%s %d", PLDBG_SELECT_FRAME,
+			frameNumber
+		);
 
 		sendString( session, frameString );
 
@@ -614,10 +619,13 @@ Datum pldbg_get_source( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
 	Oid			   funcOID = PG_GETARG_OID( 1 );
-	char		   sourceString[13];		/* 10 digits(oid) + space + 1 command + null terminator */
+	char		   sourceString[PLDBG_STRING_MAX_LEN];
 	char		 * source;
 
-	sprintf( sourceString, "%s %d", PLDBG_GET_SOURCE, funcOID );
+	snprintf(
+		sourceString, PLDBG_STRING_MAX_LEN, "%s %u",
+		PLDBG_GET_SOURCE, funcOID
+	);
 
 	sendString( session, sourceString );
 
@@ -779,7 +787,7 @@ Datum pldbg_get_stack( PG_FUNCTION_ARGS )
 	if(( frameString = getNString( session )) != NULL )
 	{
 		char	  * values[5];
-		char		callCount[10+1];
+		char		callCount[PLDBG_STRING_MAX_LEN];
 		char      * ctx = NULL;
 		HeapTuple   result;
 
@@ -787,7 +795,10 @@ Datum pldbg_get_stack( PG_FUNCTION_ARGS )
 		 * frameString points to a string like:
 		 *	targetName:funcOID:lineNumber:arguments
 		 */
-		sprintf( callCount, "%d", srf->call_cntr );
+		snprintf(
+			callCount, PLDBG_STRING_MAX_LEN, UINT64_FORMAT,
+			UINT64CONST(srf->call_cntr)
+		);
 
 		values[0] = callCount;
 		values[1] = tokenize( frameString, ":", &ctx );	/* targetName					*/
@@ -846,9 +857,12 @@ Datum pldbg_set_breakpoint( PG_FUNCTION_ARGS )
 	debugSession * session    = defaultSession( PG_GETARG_SESSION( 0 ));
 	Oid			   funcOID    = PG_GETARG_OID( 1 );
 	int			   lineNumber = PG_GETARG_INT32( 2 );
-	char		   breakpointString[24];	/* 20 digits + 2 delimiters + 1 command + null terminator */
+	char		   breakpointString[PLDBG_STRING_MAX_LEN];
 
-	sprintf( breakpointString, "%s %d:%d", PLDBG_SET_BREAKPOINT, funcOID, lineNumber );
+	snprintf(
+		breakpointString, PLDBG_STRING_MAX_LEN, "%s %u:%d",
+		PLDBG_SET_BREAKPOINT, funcOID, lineNumber
+	);
 
 	sendString( session, breakpointString );
 		
@@ -865,9 +879,12 @@ Datum pldbg_drop_breakpoint( PG_FUNCTION_ARGS )
 	debugSession * session    = defaultSession( PG_GETARG_SESSION( 0 ));
 	Oid			   funcOID    = PG_GETARG_OID( 1 );
 	int			   lineNumber = PG_GETARG_INT32( 2 );
-	char		   breakpointString[13];	/* 10 digits + 1 delimiters + 1 command + null terminator */
+	char		   breakpointString[PLDBG_STRING_MAX_LEN];
 
-	sprintf( breakpointString, "%s %d:%d", PLDBG_CLEAR_BREAKPOINT, funcOID, lineNumber );
+	snprintf(
+		breakpointString, PLDBG_STRING_MAX_LEN, "%s %u:%d",
+		PLDBG_CLEAR_BREAKPOINT, funcOID, lineNumber
+	);
 
 	sendString( session, breakpointString );
 		
