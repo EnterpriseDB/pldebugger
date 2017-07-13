@@ -797,7 +797,7 @@ Datum pldbg_get_stack( PG_FUNCTION_ARGS )
 		 */
 		snprintf(
 			callCount, PLDBG_STRING_MAX_LEN, UINT64_FORMAT,
-			UINT64CONST(srf->call_cntr)
+			uint64(srf->call_cntr)
 		);
 
 		values[0] = callCount;
