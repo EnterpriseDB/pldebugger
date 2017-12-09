@@ -93,4 +93,13 @@ extern debugger_language_t plpgsql_debugger_lang;
 extern debugger_language_t spl_debugger_lang;
 #endif
 
+#if PG_VERSION_NUM >= 110000
+    #ifndef TRUE
+        #define TRUE true
+    #endif
+    #ifndef FALSE
+        #define FALSE false
+    #endif
+#endif
+
 #endif

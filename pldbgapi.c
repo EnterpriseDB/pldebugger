@@ -116,6 +116,15 @@
 #include "access/htup_details.h"
 #endif
 
+#if PG_VERSION_NUM >= 110000
+    #ifndef TRUE
+        #define TRUE true
+    #endif
+    #ifndef FALSE
+        #define FALSE false
+    #endif
+#endif
+
 /*
  * Let the PG module loader know that we are compiled against
  * the right version of the PG header files

@@ -360,6 +360,15 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 					break;
 				}
 #endif
+				case PLPGSQL_DTYPE_ROW:
+				case PLPGSQL_DTYPE_REC:
+				case PLPGSQL_DTYPE_RECFIELD:
+				case PLPGSQL_DTYPE_ARRAYELEM:
+				case PLPGSQL_DTYPE_EXPR:
+				{
+					/* FIXME: implement other types */
+					break;
+				}
 			}
 		}
 	}
@@ -640,7 +649,11 @@ print_rec(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
 	{
 		char * extval = SPI_getvalue( tgt->tup, tgt->tupdesc, attNo + 1 );
 
+#if PG_VERSION_NUM >= 110000
+		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( tgt->tupdesc->attrs[attNo].attname ), extval ? extval : "NULL" );
+#else
 		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( tgt->tupdesc->attrs[attNo]->attname ), extval ? extval : "NULL" );
+#endif
 
 		if( extval )
 			pfree( extval );
@@ -687,6 +700,13 @@ plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
 			print_recfield( estate, var_name, lineno, (PLpgSQL_recfield *) generic );
 			break;
 
+		case PLPGSQL_DTYPE_ARRAYELEM:
+		case PLPGSQL_DTYPE_EXPR:
+			/**
+			 * FIXME::
+			 * Hmm..  Shall we print the values for expression/array element?
+			 **/
+			break;
 	}
 }
 
