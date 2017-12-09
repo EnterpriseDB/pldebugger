@@ -36,7 +36,7 @@
  *	'pldbg_attach_to_port()', but we'll add more as soon as we
  *	implement global breakpoints). Each connection function returns
  *	a session ID that identifies that debugging session (a debugger
- *	client can maintain multiple simultaneous sessions by keeping 
+ *	client can maintain multiple simultaneous sessions by keeping
  *	track of each session identifier).  You pass that session ID
  *	to all of the other proxy functions.
  *
@@ -61,11 +61,11 @@
  *	target returns a tuple of type breakpoint does not imply that the target
  *	has paused at a breakpoint - it may have paused because of a step-over or
  *	step-into operation.
- *	 
+ *
  *	When the target is paused at a breakpoint (or has paused after
  *	a step-over or step-into), you can interrogate the target by calling
- *	pldbg_get_stack(), pldbg_get_source(), pldbg_get_breakpoints(), or 
- *	pldbg_get_variables().  
+ *	pldbg_get_stack(), pldbg_get_source(), pldbg_get_breakpoints(), or
+ *	pldbg_get_variables().
  *
  *	The debugger server groks the PL call stack and maintains a
  *	'focus' frame.  By default, the debugger server focuses on the most
@@ -83,7 +83,7 @@
  *
  * Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
  *
- * Licensed under the Artistic License, see 
+ * Licensed under the Artistic License, see
  *		http://www.opensource.org/licenses/artistic-license.php
  * for full details
  */
@@ -117,12 +117,12 @@
 #endif
 
 #if PG_VERSION_NUM >= 110000
-    #ifndef TRUE
-        #define TRUE true
-    #endif
-    #ifndef FALSE
-        #define FALSE false
-    #endif
+	#ifndef TRUE
+		#define TRUE true
+	#endif
+	#ifndef FALSE
+		#define FALSE false
+	#endif
 #endif
 
 /*
@@ -163,9 +163,9 @@ PG_FUNCTION_INFO_V1( pldbg_set_global_breakpoint );	/* Create a global breakpoin
  *
  *	A debugger client may attach to many target sessions at the same time. We
  *	keep track of each connection in a debugSession structure. When the client
- *	makes a connection, we allocate a new debugSession structure and return 
- *	a handle to that structure to the caller.  He gives us back the handle 
- *	whenever he calls another proxy function. A handle is just a smallish 
+ *	makes a connection, we allocate a new debugSession structure and return
+ *	a handle to that structure to the caller.  He gives us back the handle
+ *	whenever he calls another proxy function. A handle is just a smallish
  *  integer value that we use to track each session - we use a hash to map
  *  handles into debugSession pointers.
  */
@@ -202,7 +202,7 @@ static debugSession * mostRecentSession;
 static HTAB			* sessionHash;
 
 /*******************************************************************************
- * The following symbols represent the magic strings that we send to the 
+ * The following symbols represent the magic strings that we send to the
  * debugger server running in the target process
  */
 
@@ -212,7 +212,7 @@ static HTAB			* sessionHash;
 #define PLDBG_STEP_INTO			"s\n"
 #define PLDBG_STEP_OVER			"o\n"
 #define PLDBG_CONTINUE			"c\n"
-#define PLDBG_ABORT				"x"			
+#define PLDBG_ABORT				"x"
 #define PLDBG_SELECT_FRAME		"^"			/* Followed by frame number 				*/
 #define PLDBG_SET_BREAKPOINT		"b"			/* Followed by pkgoid:funcoid:linenumber 	*/
 #define PLDBG_CLEAR_BREAKPOINT	"f"			/* Followed by pkgoid:funcoid:linenumber 	*/
@@ -224,8 +224,8 @@ static HTAB			* sessionHash;
 #define PROXY_API_VERSION		3			/* API version number						*/
 
 /*******************************************************************************
- * We currently define three PostgreSQL data types (all tuples) - the following 
- * symbols correspond to the names for those types. 
+ * We currently define three PostgreSQL data types (all tuples) - the following
+ * symbols correspond to the names for those types.
  */
 
 #define	TYPE_NAME_BREAKPOINT	"breakpoint"	/* May change to pldbg.breakpoint later	*/
@@ -285,15 +285,15 @@ static TupleDesc	  	 getResultTupleDesc( FunctionCallInfo fcinfo );
  * pldbg_attach_to_port( portNumber INTEGER ) RETURNS INTEGER
  *
  *	This function attaches to a debugging target listening on the given port. A
- *  debugger client should invoke this function in response to a PLDBGBREAK 
+ *  debugger client should invoke this function in response to a PLDBGBREAK
  *  NOTICE (the notice contains the port number that you should connect to).
  *
  *	This function returns a session handle that identifies this particular debug
  *  session. When you call any of the other pldbg functions, you must supply
- *	the session handle returned by pldbg_attach_to_port().  
+ *	the session handle returned by pldbg_attach_to_port().
  *
- *	A given debugger client can maintain multiple simultaneous sessions 
- *	by calling pldbg_attach_to_port() many times (with different port 
+ *	A given debugger client can maintain multiple simultaneous sessions
+ *	by calling pldbg_attach_to_port() many times (with different port
  *	numbers) and keeping track of the returned session handles.
  */
 
@@ -324,7 +324,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 
 	/*
 	 * For convenience, remember the most recent session - if you call
-	 * another pldbg_xxx() function with sessionHandle = 0, we'll use 
+	 * another pldbg_xxx() function with sessionHandle = 0, we'll use
 	 * the most recent session.
 	 */
 	mostRecentSession = session;
@@ -332,7 +332,7 @@ Datum pldbg_attach_to_port( PG_FUNCTION_ARGS )
 	PG_RETURN_INT32(addSession(session));
 }
 
-Datum pldbg_create_listener( PG_FUNCTION_ARGS ) 
+Datum pldbg_create_listener( PG_FUNCTION_ARGS )
 {
 	debugSession * session = MemoryContextAllocZero( TopMemoryContext, sizeof( *session ));
 
@@ -356,8 +356,8 @@ Datum pldbg_create_listener( PG_FUNCTION_ARGS )
  *	session. When you call any of the other pldbg functions, you must supply
  *	this session handle.
  *
- *	A given debugger client can maintain multiple simultaneous sessions 
- *	by calling pldbg_attach_to_port() many times (with different port 
+ *	A given debugger client can maintain multiple simultaneous sessions
+ *	by calling pldbg_attach_to_port() many times (with different port
  *	numbers) and keeping track of the returned session handles.
  */
 
@@ -464,7 +464,7 @@ static Datum buildBreakpointDatum( char * breakpointString )
 	values[2] = tokenize( NULL, ":", &ctx );				/* targetName		*/
 
 	result = BuildTupleFromCStrings( TupleDescGetAttInMetadata( tupleDesc ), values );
-	
+
 	return( HeapTupleGetDatum( result ));
 }
 
@@ -537,7 +537,7 @@ Datum pldbg_step_over( PG_FUNCTION_ARGS )
 Datum pldbg_continue( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
-	
+
 	sendString( session, PLDBG_CONTINUE );
 
 	PG_RETURN_DATUM( buildBreakpointDatum( getNString( session )));
@@ -553,7 +553,7 @@ Datum pldbg_continue( PG_FUNCTION_ARGS )
 Datum pldbg_abort_target( PG_FUNCTION_ARGS )
 {
 	debugSession * session = defaultSession( PG_GETARG_SESSION( 0 ));
-	
+
 	sendString( session, PLDBG_ABORT );
 
 	PG_RETURN_BOOL( getBool( session ));
@@ -561,19 +561,19 @@ Datum pldbg_abort_target( PG_FUNCTION_ARGS )
 }
 
 /*******************************************************************************
- * pldbg_select_frame( sessionID INTEGER, frameNumber INTEGER ) 
+ * pldbg_select_frame( sessionID INTEGER, frameNumber INTEGER )
  *   RETURNS breakpoint
  *
  *	This function changes the debugger focus to the indicated frame (in the call
- *	stack). Whenever the target stops (at a breakpoint or as the result of a 
- *	step/into or step/over), the debugger changes focus to most deeply nested 
+ *	stack). Whenever the target stops (at a breakpoint or as the result of a
+ *	step/into or step/over), the debugger changes focus to most deeply nested
  *  function in the call stack (because that's the function that's executing).
  *
  *	You can change the debugger focus to other stack frames - once you do that,
  *	you can examine the source code for that frame, the variable values in that
- *	frame, and the breakpoints in that target. 
+ *	frame, and the breakpoints in that target.
  *
- *	The debugger focus remains on the selected frame until you change it or 
+ *	The debugger focus remains on the selected frame until you change it or
  *	the target stops at another breakpoint.
  *
  *	This function returns a tuple of type 'breakpoint' that contains the
@@ -603,7 +603,7 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
 		resultString = getNString( session );
 
 		result = buildBreakpointDatum( resultString );
-	
+
 		PG_RETURN_DATUM( result );
 	}
 }
@@ -612,14 +612,14 @@ Datum pldbg_select_frame( PG_FUNCTION_ARGS )
  * pldbg_get_source( sessionID INTEGER, functionOID OID )
  *   RETURNS CSTRING
  *
- *	This function returns the source code for the given function. A debugger 
+ *	This function returns the source code for the given function. A debugger
  *	client should always retrieve source code using this function instead of
- *  reading pg_proc.  If you read pg_proc instead, the source code that you 
- *	read may not match the source that the target is actually executing 
+ *  reading pg_proc.  If you read pg_proc instead, the source code that you
+ *	read may not match the source that the target is actually executing
  *	(because the source code may have been modified in a different transaction).
  *
- *  pldbg_get_source() always retrieves the source code from the target and 
- *  ensures that the source code that you get is the source code that the 
+ *  pldbg_get_source() always retrieves the source code from the target and
+ *  ensures that the source code that you get is the source code that the
  *  target is executing.
  *
  */
@@ -696,7 +696,7 @@ Datum pldbg_get_breakpoints( PG_FUNCTION_ARGS )
  *	stack frame that has the focus.  Each tuple contains the name of the
  *	variable, the line number at which the variable was declared, a flag
  *	that tells you whether the name is unique within the scope of the function
- *	(if the name is not unique, a debugger client may use the line number to 
+ *	(if the name is not unique, a debugger client may use the line number to
  *	distinguish between variables with the same name), a flag that tells you
  *	whether the variables is a CONST, a flag that tells you whether the variable
  *	is NOT NULL, the data type of the variable (the OID of the corresponding
@@ -763,7 +763,7 @@ Datum pldbg_get_variables( PG_FUNCTION_ARGS )
  * pldbg_get_stack( sessionID INTEGER ) RETURNS SETOF frame
  *
  *	This function returns a SETOF frame tuples.  Each tuple in the result
- *	set contains information about one stack frame: the tuple contains the 
+ *	set contains information about one stack frame: the tuple contains the
  *	function OID, and line number within that function.  Each tuple also
  *	contains a string that you can use to display the name and value of each
  *	argument to that particular invocation.
@@ -829,10 +829,10 @@ Datum pldbg_get_stack( PG_FUNCTION_ARGS )
  * pldbg_get_proxy_info( ) RETURNS proxyInfo
  *
  *  This function retrieves a small collection of parameters from the server, all
- *  parameters are related to the version of the server and the version of this 
+ *  parameters are related to the version of the server and the version of this
  *  proxy API.
  *
- *  You can call this function (from the debugger client process) to find out 
+ *  You can call this function (from the debugger client process) to find out
  *  which version of the proxy API you are talking to - if this function does
  *  not exist, you can assume that you are talking to a version 1 proxy server.
  */
@@ -851,7 +851,7 @@ Datum pldbg_get_proxy_info( PG_FUNCTION_ARGS )
 
 	result = heap_form_tuple( tupleDesc, values, nulls );
 
-	PG_RETURN_DATUM( HeapTupleGetDatum( result ));	   
+	PG_RETURN_DATUM( HeapTupleGetDatum( result ));
 }
 
 /*******************************************************************************
@@ -874,7 +874,7 @@ Datum pldbg_set_breakpoint( PG_FUNCTION_ARGS )
 	);
 
 	sendString( session, breakpointString );
-		
+
 	PG_RETURN_BOOL( getBool( session ));
 }
 
@@ -896,7 +896,7 @@ Datum pldbg_drop_breakpoint( PG_FUNCTION_ARGS )
 	);
 
 	sendString( session, breakpointString );
-		
+
 	PG_RETURN_BOOL( getBool( session ));
 }
 
@@ -938,10 +938,10 @@ Datum pldbg_deposit_value( PG_FUNCTION_ARGS )
  * initializeModule()
  *
  *	Initializes the debugger proxy module.  For now, we just register a callback
- *	(cleanupAtExit()) that this backend will invoke on exit - we use that 
+ *	(cleanupAtExit()) that this backend will invoke on exit - we use that
  *	callback to gracefully close any outstanding connections.
  *
- *	NOTE: this would also be a good place to load the tuple descriptions for 
+ *	NOTE: this would also be a good place to load the tuple descriptions for
  *		  each of the complex datatypes that we use (breakpoint, var, frame).
  */
 
@@ -960,7 +960,7 @@ static void initializeModule( void )
 /*******************************************************************************
  * defaultSession()
  *
- *	This function is designed to make it a little easier to build a simple 
+ *	This function is designed to make it a little easier to build a simple
  *  debugger client.  Instead of managing session identifiers, you can simply
  *	pass '0' to each function that requires a session ID.  When a proxy function
  *  encounters a session ID of 0, it assumes that you want to work with the most
@@ -988,7 +988,7 @@ static debugSession * defaultSession( sessionHandle handle )
 		session = findSession( handle );
 
 		if( session == NULL )
-			ereport( ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE), errmsg( "invalid session handle" )));			
+			ereport( ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE), errmsg( "invalid session handle" )));
 		else
 		{
 			mostRecentSession = session;
@@ -1005,7 +1005,7 @@ static debugSession * defaultSession( sessionHandle handle )
  *	Initialize a hash table that we use to map session handles (simple integer
  *	values) into debugSession pointers.
  *
- *  You should call this function before you use the hash - you can call it 
+ *  You should call this function before you use the hash - you can call it
  *  as many times as you like, it will only initialize the hash table on the
  *  first invocation.
  */
@@ -1031,8 +1031,8 @@ static void initSessionHash()
  *
  *	Adds a session (debugSession *) to the hash that we use to map session
  *  handles into debugSession pointers.  This function returns a handle that
- *	you should give back to the debugger client process.  When the debugger 
- *  client calls us again, he gives us the handle and we map that back into 
+ *	you should give back to the debugger client process.  When the debugger
+ *  client calls us again, he gives us the handle and we map that back into
  *  a debugSession pointer.  That way, we don't have to expose a pointer to
  *	the debugger client (which can make for nasty denial of service hacks, not
  *  to mention 32-bit vs. 64-bit hassles).
@@ -1060,8 +1060,8 @@ static sessionHandle addSession( debugSession * session )
 /*******************************************************************************
  * findSession()
  *
- *	Given a sessionHandle (integer), this function returns the corresponding 
- *  debugSession pointer.  If the sessionHandle is invalid (that is, it's a 
+ *	Given a sessionHandle (integer), this function returns the corresponding
+ *  debugSession pointer.  If the sessionHandle is invalid (that is, it's a
  *  number not returned by addSession()), this function returns NULL.
  */
 
@@ -1085,16 +1085,16 @@ static debugSession * findSession( sessionHandle handle )
 /*******************************************************************************
  * tokenize()
  *
- *	This is a re-entrant safe version of the standard C strtok() function.  
+ *	This is a re-entrant safe version of the standard C strtok() function.
  *	tokenize() will split a string (src) into multiple substrings separated by
- *	any of the characters in the delimiter string (delimiters).  Each time you 
+ *	any of the characters in the delimiter string (delimiters).  Each time you
  *	call tokenize(), it returns the next subtstring (or NULL when all substrings
  *	have been exhausted). The first time you call this function, ctx should be
  *	NULL and src should point to the start of the string you are splitting.
  *	For every subsequent call, src should be NULL and tokenize() will manage
  *	ctx itself.
  *
- *	NOTE: the search string (src) is brutally altered by this function - make 
+ *	NOTE: the search string (src) is brutally altered by this function - make
  *		  a copy of the search string before you call tokenize() if you need the
  *		  original string.
  */
@@ -1108,8 +1108,8 @@ static char * tokenize( char * src, const char * delimiters, char ** ctx )
 		src = *ctx;
 
 	/*
-	 * Special case - if delimiters is NULL, we just return the 
-	 * remainder of the string. 
+	 * Special case - if delimiters is NULL, we just return the
+	 * remainder of the string.
 	 */
 
 	if( delimiters == NULL )
@@ -1132,10 +1132,10 @@ static char * tokenize( char * src, const char * delimiters, char ** ctx )
 		*ctx = strchr( start, '\0' );
 	}
 	else
-    {
+	{
 		*end = '\0';
 		*ctx = end + 1;
-    }
+	}
 
 	return( start );
 }
@@ -1143,11 +1143,11 @@ static char * tokenize( char * src, const char * delimiters, char ** ctx )
 /*******************************************************************************
  * readn()
  *
- *	This function reads exactly 'len' bytes from the given socket or it 
+ *	This function reads exactly 'len' bytes from the given socket or it
  *  throws an error (ERRCODE_CONNECTION_FAILURE).  readn() will hang until
  *	the proper number of bytes have been read (or an error occurs).
  *
- *	Note: dst must point to a buffer large enough to hold at least 'len' 
+ *	Note: dst must point to a buffer large enough to hold at least 'len'
  *	bytes.  readn() returns dst (for convenience).
  */
 
@@ -1229,7 +1229,7 @@ static void * readn( int serverHandle, void * dst, size_t len )
 /*******************************************************************************
  * writen()
  *
- *	This function writes exactly 'len' bytes to the given socket or it 
+ *	This function writes exactly 'len' bytes to the given socket or it
  *  throws an error (ERRCODE_CONNECTION_FAILURE).  writen() will hang until
  *	the proper number of bytes have been written (or an error occurs).
  */
@@ -1260,7 +1260,7 @@ static void * writen( int serverHandle, void * src, size_t len )
  * sendBytes()
  *
  *	This function sends 'len' bytes to the server (identfied by a debugSession
- *	pointer).  'src' should point to the bytes that you want to send to the 
+ *	pointer).  'src' should point to the bytes that you want to send to the
  *	server.
  */
 
@@ -1286,8 +1286,8 @@ static void sendUInt32( debugSession * session, uint32 val )
 /*******************************************************************************
  * sendString()
  *
- *	This function sends a string value (src) to the debugger server.  'src' 
- *	should point to a null-terminated string.  We send the length of the string 
+ *	This function sends a string value (src) to the debugger server.  'src'
+ *	should point to a null-terminated string.  We send the length of the string
  *	(as a 32-bit unsigned integer), then the bytes that make up the string - we
  *	don't send the null-terminator.
  */
@@ -1348,9 +1348,9 @@ static uint32 getUInt32( debugSession * session )
 /******************************************************************************
  * getNstring()
  *
- *	This function is the opposite of sendString() - it reads a string from the 
+ *	This function is the opposite of sendString() - it reads a string from the
  *	debugger server.  The server sends the length of the string and then the
- *	bytes that make up the string (minus the null-terminator).  We palloc() 
+ *	bytes that make up the string (minus the null-terminator).  We palloc()
  *	enough space to hold the entire string (including the null-terminator) and
  *	return a pointer to that space (after, of course, reading the string from
  *	the server and tacking on the null-terminator).
@@ -1384,7 +1384,7 @@ static char * getNString( debugSession * session )
 static void closeSession( debugSession * session )
 {
 	if( session->serverSocket )
-	        closesocket( session->serverSocket );
+		closesocket( session->serverSocket );
 
 	if( session->listener )
 		BreakpointCleanupProc( MyProcPid );

@@ -48,7 +48,7 @@
 
 typedef struct
 {
-    bool	    isnull;			/* TRUE -> this variable IS NULL */
+	bool	    isnull;			/* TRUE -> this variable IS NULL */
 	bool		visible;		/* hidden or visible? see is_visible_datum() */
 	bool		duplicate_name;	/* Is this one of many vars with same name? */
 } var_value;
@@ -65,9 +65,9 @@ typedef struct
 
 typedef struct
 {
-    PLpgSQL_function *	func;		/* Function definition */
-    bool				stepping;	/* If TRUE, stop at next statement */
-    var_value	     *  symbols;	/* Extra debugger-private info about variables */
+	PLpgSQL_function *	func;		/* Function definition */
+	bool				stepping;	/* If TRUE, stop at next statement */
+	var_value	     *  symbols;	/* Extra debugger-private info about variables */
 	char			 ** argNames;	/* Argument names */
 	int					argNameCount; /* Number of names pointed to by argNames */
 	void 			 (* error_callback)(void *arg);
@@ -451,9 +451,9 @@ plpgsql_select_frame(ErrorContextCallback *frame)
 static PLpgSQL_var *
 find_var_by_name(const PLpgSQL_execstate * estate, const char * var_name, int lineno, int * index)
 {
-    dbg_ctx          * dbg_info = (dbg_ctx *)estate->plugin_info;
-    PLpgSQL_function * func     = dbg_info->func;
-    int                i;
+	dbg_ctx          * dbg_info = (dbg_ctx *)estate->plugin_info;
+	PLpgSQL_function * func     = dbg_info->func;
+	int                i;
 
 	for( i = 0; i < func->ndatums; i++ )
 	{
@@ -479,7 +479,7 @@ find_var_by_name(const PLpgSQL_execstate * estate, const char * var_name, int li
 
 	/* We can't find the variable named by the caller - return NULL */
 
-    return( NULL );
+	return( NULL );
 
 }
 
@@ -585,38 +585,38 @@ static void
 print_var(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
 		  const PLpgSQL_var *tgt)
 {
-    char	     	 * extval;
-    HeapTuple	       typeTup;
-    Form_pg_type       typeStruct;
-    FmgrInfo	       finfo_output;
-    dbg_ctx 		 * dbg_info = (dbg_ctx *)frame->plugin_info;
+	char	     	 * extval;
+	HeapTuple	       typeTup;
+	Form_pg_type       typeStruct;
+	FmgrInfo	       finfo_output;
+	dbg_ctx 		 * dbg_info = (dbg_ctx *)frame->plugin_info;
 
-    if( tgt->isnull )
-    {
+	if( tgt->isnull )
+	{
 		if( dbg_info->symbols[tgt->dno].duplicate_name )
 			dbg_send( "v:%s(%d):NULL\n", var_name, lineno );
 		else
 			dbg_send( "v:%s:NULL\n", var_name );
 		return;
-    }
+	}
 
-    /* Find the output function for this data type */
+	/* Find the output function for this data type */
 
-    typeTup = SearchSysCache( TYPEOID, ObjectIdGetDatum( tgt->datatype->typoid ), 0, 0, 0 );
+	typeTup = SearchSysCache( TYPEOID, ObjectIdGetDatum( tgt->datatype->typoid ), 0, 0, 0 );
 
-    if( !HeapTupleIsValid( typeTup ))
-    {
+	if( !HeapTupleIsValid( typeTup ))
+	{
 		dbg_send( "v:%s(%d):***can't find type\n", var_name, lineno );
 		return;
-    }
+	}
 
-    typeStruct = (Form_pg_type)GETSTRUCT( typeTup );
+	typeStruct = (Form_pg_type)GETSTRUCT( typeTup );
 
 	/* Now invoke the output function to convert the variable into a null-terminated string */
 
-    fmgr_info( typeStruct->typoutput, &finfo_output );
+	fmgr_info( typeStruct->typoutput, &finfo_output );
 
-    extval = DatumGetCString( FunctionCall3( &finfo_output, tgt->value, ObjectIdGetDatum(typeStruct->typelem), Int32GetDatum(-1)));
+	extval = DatumGetCString( FunctionCall3( &finfo_output, tgt->value, ObjectIdGetDatum(typeStruct->typelem), Int32GetDatum(-1)));
 
 	/* Send the name:value to the debugger client */
 
@@ -625,8 +625,8 @@ print_var(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
 	else
 		dbg_send( "v:%s:%s\n", var_name, extval );
 
-    pfree( extval );
-    ReleaseSysCache( typeTup );
+	pfree( extval );
+	ReleaseSysCache( typeTup );
 }
 
 static void
@@ -676,11 +676,11 @@ plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
 
 	/* Try to find the given variable */
 
-    if(( generic = (PLpgSQL_variable*) find_var_by_name( estate, var_name, lineno, NULL )) == NULL )
-    {
+	if(( generic = (PLpgSQL_variable*) find_var_by_name( estate, var_name, lineno, NULL )) == NULL )
+	{
 		dbg_send( "v:%s(%d):Unknown variable (or not in scope)\n", var_name, lineno );
 		return;
-    }
+	}
 
 	switch( generic->dtype )
 	{
@@ -729,7 +729,7 @@ plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
 static void
 mark_duplicate_names(const PLpgSQL_execstate *estate, int var_no)
 {
-    dbg_ctx * dbg_info = (dbg_ctx *)estate->plugin_info;
+	dbg_ctx * dbg_info = (dbg_ctx *)estate->plugin_info;
 
 	if( dbg_info->symbols[var_no].duplicate_name )
 	{
@@ -787,9 +787,9 @@ mark_duplicate_names(const PLpgSQL_execstate *estate, int var_no)
 static void
 completeFrame(PLpgSQL_execstate *frame)
 {
-    dbg_ctx 		 * dbg_info = (dbg_ctx *)frame->plugin_info;
-    PLpgSQL_function * func     = dbg_info->func;
-    int		           i;
+	dbg_ctx 		 * dbg_info = (dbg_ctx *)frame->plugin_info;
+	PLpgSQL_function * func     = dbg_info->func;
+	int		           i;
 
 	if( dbg_info->symbols == NULL )
 	{
@@ -879,22 +879,22 @@ static char *
 get_text_val(PLpgSQL_var *var, char **name, char **type)
 {
 	HeapTuple	       typeTup;
-    Form_pg_type       typeStruct;
-    FmgrInfo	       finfo_output;
+	Form_pg_type       typeStruct;
+	FmgrInfo	       finfo_output;
 	char            *  text_value = NULL;
 
-    /* Find the output function for this data type */
-    typeTup = SearchSysCache( TYPEOID, ObjectIdGetDatum( var->datatype->typoid ), 0, 0, 0 );
+	/* Find the output function for this data type */
+	typeTup = SearchSysCache( TYPEOID, ObjectIdGetDatum( var->datatype->typoid ), 0, 0, 0 );
 
-    if( !HeapTupleIsValid( typeTup ))
+	if( !HeapTupleIsValid( typeTup ))
 		return( NULL );
 
-    typeStruct = (Form_pg_type)GETSTRUCT( typeTup );
+	typeStruct = (Form_pg_type)GETSTRUCT( typeTup );
 
 	/* Now invoke the output function to convert the variable into a null-terminated string */
-    fmgr_info( typeStruct->typoutput, &finfo_output );
+	fmgr_info( typeStruct->typoutput, &finfo_output );
 
-    text_value = DatumGetCString( FunctionCall3( &finfo_output, var->value, ObjectIdGetDatum(typeStruct->typelem), Int32GetDatum(-1)));
+	text_value = DatumGetCString( FunctionCall3( &finfo_output, var->value, ObjectIdGetDatum(typeStruct->typelem), Int32GetDatum(-1)));
 
 	ReleaseSysCache( typeTup );
 
@@ -940,10 +940,10 @@ dbg_startup(PLpgSQL_execstate *estate, PLpgSQL_function *func)
 static void
 initialize_plugin_info(PLpgSQL_execstate *estate, PLpgSQL_function *func)
 {
-    dbg_ctx * dbg_info;
+	dbg_ctx * dbg_info;
 
 	/* Allocate a context structure and record the address in the estate */
-    estate->plugin_info = dbg_info = (dbg_ctx *) palloc( sizeof( dbg_ctx ));
+	estate->plugin_info = dbg_info = (dbg_ctx *) palloc( sizeof( dbg_ctx ));
 
 	/*
 	 * As soon as we hit the first statement, we'll allocate space for each
@@ -952,7 +952,7 @@ initialize_plugin_info(PLpgSQL_execstate *estate, PLpgSQL_function *func)
 	 */
 	dbg_info->symbols  		 = NULL;
 	dbg_info->stepping 		 = FALSE;
-    dbg_info->func     		 = func;
+	dbg_info->func     		 = func;
 
 	/*
 	 * The PL interpreter filled in two member of our plugin_funcs
@@ -1035,7 +1035,7 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 	bool		retval = false;
 
 	target = find_datum_by_name(estate, var_name, lineno, NULL);
-    if (!target)
+	if (!target)
 		return false;
 
 	/*
@@ -1049,7 +1049,7 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 
 	sprintf( select, "SELECT %s", value );
 
-    /*
+	/*
 	 * Note: we must create a dynamically allocated PLpgSQL_expr here - we
 	 *       can't create one on the stack because exec_assign_expr()
 	 *       links this expression into a list (active_simple_exprs) and
@@ -1106,7 +1106,7 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 	}
 	PG_END_TRY();
 
-    /*
+	/*
 	 * If the given value is not a valid expression, try converting
 	 * the value into a literal by sinqle-quoting it.
 	 */
@@ -1257,7 +1257,7 @@ is_datum_visible(PLpgSQL_datum *datum)
 static bool
 is_var_visible(PLpgSQL_execstate *frame, int var_no)
 {
-    dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
+	dbg_ctx * dbg_info = (dbg_ctx *)frame->plugin_info;
 
 	if (dbg_info->symbols == NULL)
 		completeFrame(frame);
@@ -1278,7 +1278,7 @@ plpgsql_send_cur_line(ErrorContextCallback *frame)
 {
 	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
 	PLpgSQL_stmt *stmt = estate->err_stmt;
-    dbg_ctx	   *dbg_info = (dbg_ctx *) estate->plugin_info;
+	dbg_ctx	   *dbg_info = (dbg_ctx *) estate->plugin_info;
 	PLpgSQL_function *func = dbg_info->func;
 
 	dbg_send( "%d:%d:%s",
@@ -1330,7 +1330,7 @@ dbg_newstmt(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
 {
 	PLpgSQL_execstate * frame = estate;
 
-    /*
+	/*
 	 * If there's no debugger attached, go home as quickly as possible.
 	 */
 	if( frame->plugin_info == NULL )

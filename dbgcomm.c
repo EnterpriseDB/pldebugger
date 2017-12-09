@@ -5,7 +5,7 @@
  * communication.
  * Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
  *
- * Licensed under the Artistic License, see 
+ * Licensed under the Artistic License, see
  *		http://www.opensource.org/licenses/artistic-license.php
  * for full details
  *
@@ -666,15 +666,15 @@ findTargetSlot(BackendId backendid)
 
 static uint32 resolveHostName( const char * hostName )
 {
-    struct hostent * hostDesc;
-    uint32           hostAddress;
+	struct hostent * hostDesc;
+	uint32           hostAddress;
 
-    if(( hostDesc = gethostbyname( hostName )))
+	if(( hostDesc = gethostbyname( hostName )))
 		hostAddress = ((struct in_addr *)hostDesc->h_addr )->s_addr;
-    else
+	else
 		hostAddress = inet_addr( hostName );
 
-    if(( hostAddress == -1 ) || ( hostAddress == INADDR_NONE ))
+	if(( hostAddress == -1 ) || ( hostAddress == INADDR_NONE ))
 		return( 0 );
 	else
 		return( hostAddress );

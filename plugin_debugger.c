@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
  *
- * Licensed under the Artistic License, see 
+ * Licensed under the Artistic License, see
  *		http://www.opensource.org/licenses/artistic-license.php
  * for full details
  *
@@ -56,16 +56,16 @@
  * Type and structure definitions
  **********************************************************************/
 
-/* 
+/*
  * eConnectType
  *
- *	This enum defines the different ways that we can connect to the 
- *  debugger proxy.  
+ *	This enum defines the different ways that we can connect to the
+ *  debugger proxy.
  *
  *		CONNECT_AS_SERVER means that we create a socket, bind an address to
  *		to that socket, send a NOTICE to our client application, and wait for
- *		a debugger proxy to attach to us.  That's what happens when	your 
- *		client application sets a local breakpoint and can handle the 
+ *		a debugger proxy to attach to us.  That's what happens when	your
+ *		client application sets a local breakpoint and can handle the
  *		NOTICE that we send.
  *
  *		CONNECT_AS_CLIENT means that a proxy has already created a socket
@@ -193,11 +193,11 @@ Datum pldbg_oid_debug(PG_FUNCTION_ARGS)
  * ---------------------------------------------------------------------
  * readn()
  *
- *	This function reads exactly 'len' bytes from the given socket or it 
- *	throws an error.  readn() will hang until the proper number of bytes 
+ *	This function reads exactly 'len' bytes from the given socket or it
+ *	throws an error.  readn() will hang until the proper number of bytes
  *	have been read (or an error occurs).
  *
- *	Note: dst must point to a buffer large enough to hold at least 'len' 
+ *	Note: dst must point to a buffer large enough to hold at least 'len'
  *	bytes.  readn() returns dst (for convenience).
  */
 
@@ -244,7 +244,7 @@ static uint32 readUInt32( int channel )
  *	This function reads a counted string from the given stream
  *	Returns a palloc'd, null-terminated string.
  *
- *	NOTE: the server-side of the debugger uses this function to read a 
+ *	NOTE: the server-side of the debugger uses this function to read a
  *		  string from the client side
  */
 
@@ -258,7 +258,7 @@ char *dbg_read_str( void )
 
 	dst = palloc(len + 1);
 	readn( sock, dst, len );
-	
+
 	dst[len] = '\0';
 	return dst;
 }
@@ -267,7 +267,7 @@ char *dbg_read_str( void )
  * ---------------------------------------------------------------------
  * writen()
  *
- *	This function writes exactly 'len' bytes to the given socket or it 
+ *	This function writes exactly 'len' bytes to the given socket or it
  *  	throws an error.  writen() will hang until the proper number of bytes
  *	have been written (or an error occurs).
  */
@@ -283,7 +283,7 @@ static void * writen( int peer, void * src, size_t len )
 
 		if(( bytesWritten = send( peer, buffer, bytesRemaining, 0 )) <= 0 )
 			handle_socket_error();
-		
+
 		bytesRemaining -= bytesWritten;
 		buffer         += bytesWritten;
 	}
@@ -313,12 +313,12 @@ static void sendUInt32( int channel, uint32 val )
  *	This function writes a formatted, counted string to the
  *	given stream.  The argument list for this function is identical to
  *	the argument list for the fprintf() function - you provide a socket,
- *	a format string, and then some number of arguments whose meanings 
+ *	a format string, and then some number of arguments whose meanings
  *	are defined by the format string.
  *
  *	NOTE:  the server-side of the debugger uses this function to send
  *		   data to the client side.  If the connection drops, dbg_send()
- *		   will longjmp() back to the debugger top-level so that the 
+ *		   will longjmp() back to the debugger top-level so that the
  *		   server-side can respond properly.
  */
 
@@ -328,7 +328,7 @@ void dbg_send( const char *fmt, ... )
 	char		   *data;
 	size_t			remaining;
 	int				sock = per_session_ctx.client_w;
-	
+
 	if( !sock )
 		return;
 
@@ -372,7 +372,7 @@ void dbg_send( const char *fmt, ... )
 		int written = send( sock, data, remaining, 0 );
 
 		if(written < 0)
-		{	
+		{
 			handle_socket_error();
 			continue;
 		}
@@ -397,8 +397,8 @@ void dbg_send( const char *fmt, ... )
 
 static void dbg_send_src( char * command  )
 {
-    HeapTuple			tup;
-    char				*procSrc;
+	HeapTuple			tup;
+	char				*procSrc;
 	Oid					targetOid = InvalidOid;  /* Initialize to keep compiler happy */
 
 	targetOid = atoi( command + 2 );
@@ -412,7 +412,7 @@ static void dbg_send_src( char * command  )
 
 	/* Release the process tuple and send a footer to the client so he knows we're finished */
 
-    ReleaseSysCache( tup );
+	ReleaseSysCache( tup );
 }
 
 /*
@@ -424,7 +424,7 @@ static void dbg_send_src( char * command  )
  *	OID).
  *
  *	In addition to returning a pointer to the requested source code, this
- *	function sets *tup to point to a HeapTuple (that you must release when 
+ *	function sets *tup to point to a HeapTuple (that you must release when
  *	you are finished with it).
  */
 
@@ -449,13 +449,13 @@ static char * findSource( Oid oid, HeapTuple * tup )
  *  proxy process). attach_to_proxy() will hang the PostgreSQL backend
  *  until the debugger client completes the connection.
  *
- *	We start by asking the TCP/IP stack to allocate an unused port, then we 
+ *	We start by asking the TCP/IP stack to allocate an unused port, then we
  *	extract the port number from the resulting socket, send the port number to
  *	the client application (by raising a NOTICE), and finally, we wait for the
  *	client to connect.
  *
  *	We assume that the client application knows the IP address of the PostgreSQL
- *	backend process - if that turns out to be a poor assumption, we can include 
+ *	backend process - if that turns out to be a poor assumption, we can include
  *	the IP address in the notification string that we send to the client application.
  */
 
@@ -464,7 +464,7 @@ bool attach_to_proxy( Breakpoint * breakpoint )
 	bool			result;
 	errorHandlerCtx	save;
 
-    if( per_session_ctx.client_w )
+	if( per_session_ctx.client_w )
 	{
 		/* We're already connected to a live proxy, just go home */
 		return( TRUE );
@@ -472,7 +472,7 @@ bool attach_to_proxy( Breakpoint * breakpoint )
 
 	if( breakpoint == NULL )
 	{
-		/* 
+		/*
 		 * No breakpoint - that implies that we're 'stepping into'.
 		 * We had better already have a connection to a proxy here
 		 * (how could we be 'stepping into' if we aren't connected
@@ -484,20 +484,20 @@ bool attach_to_proxy( Breakpoint * breakpoint )
 	/*
 	 * When a networking error is detected, we longjmp() to the client_lost
 	 * error handler - that normally points to a location inside of dbg_newstmt()
-	 * but we want to handle any network errors that arise while we are 
+	 * but we want to handle any network errors that arise while we are
 	 * setting up a link to the proxy.  So, we save the original client_lost
 	 * error handler context and push our own context on to the stack.
 	 */
 
 	save = client_lost;
-	
+
 	if( sigsetjmp( client_lost.m_savepoint, 1 ) != 0 )
 	{
 		client_lost = save;
 		return( FALSE );
 	}
 
-    if( breakpoint->data.proxyPort == -1 )
+	if( breakpoint->data.proxyPort == -1 )
 	{
 		/*
 		 * proxyPort == -1 implies that this is a local breakpoint,
@@ -532,9 +532,9 @@ bool attach_to_proxy( Breakpoint * breakpoint )
  *
  *	This function creates a socket, asks the TCP/IP stack to bind it to
  *	an unused port, and then waits for a debugger proxy to connect to
- *	that port.  We send a NOTICE to our client process (on the other 
+ *	that port.  We send a NOTICE to our client process (on the other
  *	end of the fe/be connection) to let the client know that it should
- *	fire up a debugger and attach to that port (the NOTICE includes 
+ *	fire up a debugger and attach to that port (the NOTICE includes
  *	the port number)
  */
 
@@ -546,7 +546,7 @@ static bool connectAsServer( void )
 	if (client_sock < 0)
 	{
 		per_session_ctx.client_w = per_session_ctx.client_r = 0;
-	    return( FALSE );
+		return( FALSE );
 	}
 	else
 	{
@@ -562,7 +562,7 @@ static bool connectAsServer( void )
  *
  *	This function connects to a waiting proxy process over the given
  *  port. We got the port number from a global breakpoint (the proxy
- *	stores it's port number in the breakpoint so we'll know how to 
+ *	stores it's port number in the breakpoint so we'll know how to
  *	find that proxy).
  */
 
@@ -591,9 +591,9 @@ static bool connectAsClient( Breakpoint * breakpoint )
  * ---------------------------------------------------------------------
  * parseBreakpoint()
  *
- *	Given a string that formatted like "funcOID:linenumber", 
- *	this function parses out the components and returns them to the 
- *	caller.  If the string is well-formatted, this function returns 
+ *	Given a string that formatted like "funcOID:linenumber",
+ *	this function parses out the components and returns them to the
+ *	caller.  If the string is well-formatted, this function returns
  *	TRUE, otherwise, we return FALSE.
  */
 
@@ -618,14 +618,14 @@ static bool parseBreakpoint( Oid * funcOID, int * lineNumber, char * breakpointS
  * ---------------------------------------------------------------------
  * addLocalBreakpoint()
  *
- *	This function adds a local breakpoint for the given function and 
+ *	This function adds a local breakpoint for the given function and
  *	line number
  */
 
 static bool addLocalBreakpoint( Oid funcOID, int lineNo )
 {
 	Breakpoint breakpoint;
-	
+
 	breakpoint.key.databaseId = MyProc->databaseId;
 	breakpoint.key.functionId = funcOID;
 	breakpoint.key.lineNumber = lineNo;
@@ -641,14 +641,14 @@ static bool addLocalBreakpoint( Oid funcOID, int lineNo )
  * ---------------------------------------------------------------------
  * setBreakpoint()
  *
- *	The debugger client can set a local breakpoint at a given 
+ *	The debugger client can set a local breakpoint at a given
  *	function/procedure and line number by calling	this function
  *  (through the debugger proxy process).
  */
 
 void setBreakpoint( char * command )
 {
-	/* 
+	/*
 	 *  Format is 'b funcOID:lineNumber'
 	 */
 	int			  lineNo;
@@ -682,7 +682,7 @@ void setBreakpoint( char * command )
 
 void clearBreakpoint( char * command )
 {
-	/* 
+	/*
 	 *  Format is 'f funcOID:lineNumber'
 	 */
 	int			  lineNo;
@@ -691,7 +691,7 @@ void clearBreakpoint( char * command )
 	if( parseBreakpoint( &funcOID, &lineNo, command + 2 ))
 	{
 		Breakpoint breakpoint;
-	
+
 		breakpoint.key.databaseId = MyProc->databaseId;
 		breakpoint.key.functionId = funcOID;
 		breakpoint.key.lineNumber = lineNo;
@@ -704,7 +704,7 @@ void clearBreakpoint( char * command )
 	}
 	else
 	{
-		dbg_send( "f" ); 
+		dbg_send( "f" );
 	}
 }
 
@@ -714,7 +714,7 @@ bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, 
 
 	key.databaseId = MyProc->databaseId;
 	key.functionId = funcOid;
-    key.lineNumber = lineNumber;
+	key.lineNumber = lineNumber;
 
 	if( per_session_ctx.step_into_next_func )
 	{
@@ -724,15 +724,15 @@ bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, 
 	}
 
 	/*
-	 *  We conduct 3 searches here.  
-	 *	
+	 *  We conduct 3 searches here.
+	 *
 	 *	First, we look for a global breakpoint at this line, targeting our
 	 *  specific backend process.
 	 *
 	 *  Next, we look for a global breakpoint (at this line) that does
 	 *  not target a specific backend process.
 	 *
-	 *	Finally, we look for a local breakpoint at this line (implicitly 
+	 *	Finally, we look for a local breakpoint at this line (implicitly
 	 *  targeting our specific backend process).
 	 *
 	 *	NOTE:  We must do the local-breakpoint search last because, when the
@@ -748,7 +748,7 @@ bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, 
 	 */
 
 	key.targetPid = MyProc->pid;		/* Search for a global breakpoint targeted at our process ID */
-  
+
 	if((( *dst = BreakpointLookup( BP_GLOBAL, &key )) != NULL ) && ((*dst)->data.busy == FALSE ))
 	{
 		*scope = BP_GLOBAL;
@@ -772,7 +772,7 @@ bool breakAtThisLine( Breakpoint ** dst, eBreakpointScope * scope, Oid funcOid, 
 	}
 
 	return( FALSE );
-}   
+}
 
 bool breakpointsForFunction( Oid funcOid )
 {
@@ -787,7 +787,7 @@ bool breakpointsForFunction( Oid funcOid )
  * handle_socket_error()
  *
  * when invoked after a socket operation it would check socket operation's
- * last error status and invoke siglongjmp incase the error is fatal. 
+ * last error status and invoke siglongjmp incase the error is fatal.
  */
 static bool handle_socket_error(void)
 {
@@ -796,17 +796,17 @@ static bool handle_socket_error(void)
 
 #ifdef WIN32
 		err = WSAGetLastError();
-			
-		switch(err) 
+
+		switch(err)
 		{
-		
+
 			case WSAEINTR:
 			case WSAEBADF:
 			case WSAEACCES:
 			case WSAEFAULT:
 			case WSAEINVAL:
 			case WSAEMFILE:
-				
+
 			/*
 			 * Windows Sockets definitions of regular Berkeley error constants
 			 */
@@ -839,7 +839,7 @@ static bool handle_socket_error(void)
 			case WSAEDQUOT:
 			case WSAESTALE:
 			case WSAEREMOTE:
-				  
+
 			/*
 			 *	Extended Windows Sockets error constant definitions
 			 */
@@ -862,7 +862,7 @@ static bool handle_socket_error(void)
 
 			/*
 			 *	Server should shut down its socket on these errors.
-			 */		
+			 */
 			case WSAENETDOWN:
 			case WSAENETUNREACH:
 			case WSAENETRESET:
@@ -870,10 +870,10 @@ static bool handle_socket_error(void)
 			case WSAESHUTDOWN:
 			case WSAEHOSTDOWN:
 			case WSAECONNREFUSED:
-			case WSAECONNRESET:		
+			case WSAECONNRESET:
 				fatal_err = TRUE;
 				break;
-			
+
 			default:
 				;
 		}
@@ -883,17 +883,17 @@ static bool handle_socket_error(void)
 			LPVOID lpMsgBuf;
 			FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,	NULL,err,
 					   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),(LPTSTR) &lpMsgBuf,0, NULL );
-		
-			elog(COMMERROR,"%s", (char *)lpMsgBuf);		
+
+			elog(COMMERROR,"%s", (char *)lpMsgBuf);
 			LocalFree(lpMsgBuf);
-			
+
 			siglongjmp(client_lost.m_savepoint, 1);
 		}
-		
-#else	
-		
+
+#else
+
 		err = errno;
-		switch(err) 
+		switch(err)
 		{
 			case EINTR:
 			case ECONNREFUSED:
@@ -901,27 +901,27 @@ static bool handle_socket_error(void)
 			case ENOTCONN:
 				fatal_err = TRUE;
 				break;
-				
+
 			case ENOTSOCK:
 			case EAGAIN:
 			case EFAULT:
 			case ENOMEM:
 			case EINVAL:
-			default:		
+			default:
 				break;
 		}
-		
+
 		if(fatal_err)
 		{
 			if(( err ) && ( err != EPIPE ))
-				elog(COMMERROR, "%s", strerror(err)); 
+				elog(COMMERROR, "%s", strerror(err));
 
-			siglongjmp(client_lost.m_savepoint, 1);	
-		}		
-			
+			siglongjmp(client_lost.m_savepoint, 1);
+		}
+
 		errno = err;
 #endif
-		
+
 	return fatal_err;
 }
 
@@ -961,7 +961,7 @@ plugin_debugger_main_loop(void)
 	/* Report the current location */
 	lang->send_cur_line(frame);
 
-	/* 
+	/*
 	 * Loop through the following chunk of code until we get a command
 	 * from the user that would let us execute this PL/pgSQL statement.
 	 */
@@ -993,7 +993,7 @@ plugin_debugger_main_loop(void)
 				setBreakpoint( command );
 				break;
 			}
-				
+
 			case PLDBG_CLEAR_BREAKPOINT:
 			{
 				clearBreakpoint( command );
@@ -1003,7 +1003,7 @@ plugin_debugger_main_loop(void)
 			case PLDBG_PRINT_VAR:
 			{
 				/*
-				 * Print value of given variable 
+				 * Print value of given variable
 				 */
 
 				lang->print_var( frame, &command[2], -1 );
@@ -1018,7 +1018,7 @@ plugin_debugger_main_loop(void)
 
 			case PLDBG_STEP_INTO:
 			{
-				/* 
+				/*
 				 * Single-step/step-into
 				 */
 				per_session_ctx.step_into_next_func = TRUE;
@@ -1056,12 +1056,12 @@ plugin_debugger_main_loop(void)
 				/* Report the new location */
 				lang->send_cur_line( frame );
 				break;
-				
+
 			}
 
 			case PLDBG_DEPOSIT:
 			{
-				/* 
+				/*
 				 * Deposit a new value into the given variable
 				 */
 				do_deposit(frame, lang, command);
@@ -1076,7 +1076,7 @@ plugin_debugger_main_loop(void)
 				lang->send_vars( frame );
 				break;
 			}
-					
+
 			case PLDBG_RESTART:
 			case PLDBG_STOP:
 			{
@@ -1110,7 +1110,7 @@ do_deposit(ErrorContextCallback *frame, debugger_language_t *lang,
 	/* command = d:var.line=expr */
 
 	var_name = command + 2;
-    value  = strchr( var_name, '=' ); /* FIXME: handle quoted identifiers here */
+	value  = strchr( var_name, '=' ); /* FIXME: handle quoted identifiers here */
 	if (!value)
 	{
 		dbg_send( "%s", "f" );
@@ -1119,7 +1119,7 @@ do_deposit(ErrorContextCallback *frame, debugger_language_t *lang,
 	*value = '\0';
 	value++;
 
-    lineno_s = strchr( var_name, '.' ); /* FIXME: handle quoted identifiers here */
+	lineno_s = strchr( var_name, '.' ); /* FIXME: handle quoted identifiers here */
 	if (!lineno_s)
 	{
 		dbg_send( "%s", "f" );
@@ -1146,7 +1146,7 @@ do_deposit(ErrorContextCallback *frame, debugger_language_t *lang,
  *	This function sends a list of breakpoints to the proxy process.
  *
  *	We only send the breakpoints defined in the given frame.
- *	
+ *
  *	For now, we maintain our own private list of breakpoints -
  *	later, we'll use the same list managed by the CREATE/
  *	DROP BREAKPOINT commands.
@@ -1190,15 +1190,15 @@ send_breakpoints(Oid funcOid)
  * select_frame()
  *
  *	This function changes the debugger focus to the indicated frame (in the call
- *	stack). Whenever the target stops (at a breakpoint or as the result of a 
- *	step/into or step/over), the debugger changes focus to most deeply nested 
+ *	stack). Whenever the target stops (at a breakpoint or as the result of a
+ *	step/into or step/over), the debugger changes focus to most deeply nested
  *  function in the call stack (because that's the function that's executing).
  *
  *	You can change the debugger focus to other stack frames - once you do that,
  *	you can examine the source code for that frame, the variable values in that
- *	frame, and the breakpoints in that target. 
+ *	frame, and the breakpoints in that target.
  *
- *	The debugger focus remains on the selected frame until you change it or 
+ *	The debugger focus remains on the selected frame until you change it or
  *	the target stops at another breakpoint.
  */
 static void
@@ -1245,10 +1245,10 @@ language_of_frame(ErrorContextCallback *frame)
 
 /* ------------------------------------------------------------------
  * send_stack()
- * 
+ *
  *   This function sends the call stack to the debugger client.  For
  *	 each PL/pgSQL stack frame that we find, we send the function name,
- *	 argument names and values, and the current line number (within 
+ *	 argument names and values, and the current line number (within
  *	 that particular invocation).
  */
 static void
@@ -1273,7 +1273,7 @@ send_stack( void )
 
 
 /*-------------------------------------------------------------------------------------
- * The shared hash table for global breakpoints. It is protected by 
+ * The shared hash table for global breakpoints. It is protected by
  * breakpointLock
  *-------------------------------------------------------------------------------------
  */
@@ -1303,7 +1303,7 @@ static HTAB *localBreakCounts;
 typedef struct BreakCountKey
 {
 	Oid			databaseId;
-    Oid			functionId;
+	Oid			functionId;
 } BreakCountKey;
 
 typedef struct BreakCount
@@ -1542,7 +1542,7 @@ BreakpointInsert(eBreakpointScope scope, BreakpointKey *key, BreakpointData *dat
 {
 	Breakpoint	*entry;
 	bool		 found;
-	
+
 	acquireLock(scope, LW_EXCLUSIVE);
 
 	entry = (Breakpoint *) hash_search(getBreakpointHash(scope), (void *)key, HASH_ENTER, &found);
@@ -1556,7 +1556,7 @@ BreakpointInsert(eBreakpointScope scope, BreakpointKey *key, BreakpointData *dat
 	entry->data      = *data;
 	entry->data.busy = FALSE;		/* Assume this breakpoint has not been nabbed by a target */
 
-	
+
 	/* register this insert in the count hash table*/
 	breakCountInsert(scope, ((BreakCountKey *)key));
 
@@ -1577,7 +1577,7 @@ BreakpointInsertOrUpdate(eBreakpointScope scope, BreakpointKey *key, BreakpointD
 {
 	Breakpoint	*entry;
 	bool		 found;
-	
+
 	acquireLock(scope, LW_EXCLUSIVE);
 
 	entry = (Breakpoint *) hash_search(getBreakpointHash(scope), (void *)key, HASH_ENTER, &found);
@@ -1592,10 +1592,10 @@ BreakpointInsertOrUpdate(eBreakpointScope scope, BreakpointKey *key, BreakpointD
 	entry->data      = *data;
 	entry->data.busy = FALSE;		/* Assume this breakpoint has not been nabbed by a target */
 
-	
+
 	/* register this insert in the count hash table*/
 	breakCountInsert(scope, ((BreakCountKey *)key));
-	
+
 	releaseLock(scope);
 
 	return( TRUE );
@@ -1607,7 +1607,7 @@ BreakpointInsertOrUpdate(eBreakpointScope scope, BreakpointKey *key, BreakpointD
  * This function marks all breakpoints that belong to the given
  * proxy (identified by pid) as 'busy'. When a potential target
  * runs into a busy breakpoint, that means that the breakpoint
- * has already been hit by some other target and that other 
+ * has already been hit by some other target and that other
  * target is engaged in a conversation with the proxy (in other
  * words, the debugger proxy and debugger client are busy).
  *
@@ -1615,7 +1615,7 @@ BreakpointInsertOrUpdate(eBreakpointScope scope, BreakpointKey *key, BreakpointD
  * to the local breakpoints list - that way, the target that's
  * actually interacting with the debugger client will continue
  * to hit those breakpoints until the target process ends.
- * 
+ *
  * When that debugging session ends, the debugger proxy calls
  * BreakpointFreeSession() to let other potential targets know
  * that the proxy can handle another target.
@@ -1627,7 +1627,7 @@ BreakpointInsertOrUpdate(eBreakpointScope scope, BreakpointKey *key, BreakpointD
  *		  target.
  */
 
-void 
+void
 BreakpointBusySession(int pid)
 {
 	HASH_SEQ_STATUS status;
@@ -1644,11 +1644,11 @@ BreakpointBusySession(int pid)
 			Breakpoint 	localCopy = *entry;
 
 			entry->data.busy = TRUE;
-			
-			/* 
+
+			/*
 			 * Now copy the global breakpoint into the
 			 * local breakpoint hash so that the target
-			 * process will hit it again (other processes 
+			 * process will hit it again (other processes
 			 * will ignore it)
 			 */
 
@@ -1664,8 +1664,8 @@ BreakpointBusySession(int pid)
 /* ---------------------------------------------------------
  * BreakpointFreeSession()
  *
- * This function marks all of the breakpoints that belong to 
- * the given proxy (identified by pid) as 'available'.  
+ * This function marks all of the breakpoints that belong to
+ * the given proxy (identified by pid) as 'available'.
  *
  * See the header comment for BreakpointBusySession() for
  * more information
@@ -1694,18 +1694,18 @@ BreakpointFreeSession(int pid)
  *
  * delete the given key from the global breakpoints hash table.
  */
-bool 
+bool
 BreakpointDelete(eBreakpointScope scope, BreakpointKey *key)
 {
 	Breakpoint	*entry;
-	
+
 	acquireLock(scope, LW_EXCLUSIVE);
 
 	entry = (Breakpoint *) hash_search(getBreakpointHash(scope), (void *) key, HASH_REMOVE, NULL);
 
 	if (entry)
  		breakCountDelete(scope, ((BreakCountKey *)key));
-	
+
 	releaseLock(scope);
 
 	if(entry == NULL)
@@ -1718,7 +1718,7 @@ BreakpointDelete(eBreakpointScope scope, BreakpointKey *key)
  * BreakpointGetList()
  *
  *	This function returns an iterator (*scan) to the caller.
- *	The caller can use this iterator to scan through the 
+ *	The caller can use this iterator to scan through the
  *	given hash table (either global or local).  The caller
  *  must call BreakpointReleaseList() when finished.
  */
@@ -1733,11 +1733,11 @@ BreakpointGetList(eBreakpointScope scope, HASH_SEQ_STATUS * scan)
 /* ------------------------------------------------------------
  * BreakpointReleaseList()
  *
- *	This function releases the iterator lock returned by an 
+ *	This function releases the iterator lock returned by an
  *	earlier call to BreakpointGetList().
  */
 
-void 
+void
 BreakpointReleaseList(eBreakpointScope scope)
 {
 	releaseLock(scope);
@@ -1746,7 +1746,7 @@ BreakpointReleaseList(eBreakpointScope scope)
 /* ------------------------------------------------------------
  * BreakpointShowAll()
  *
- * sequentially traverse the Global breakpoints hash table and 
+ * sequentially traverse the Global breakpoints hash table and
  * display all the break points via elog(INFO, ...)
  *
  * Note: The display format is still not decided.
@@ -1758,9 +1758,9 @@ BreakpointShowAll(eBreakpointScope scope)
 	HASH_SEQ_STATUS status;
 	Breakpoint	   *entry;
 	BreakCount     *count;
-	
+
 	acquireLock(scope, LW_SHARED);
-	
+
 	hash_seq_init(&status, getBreakpointHash(scope));
 
 	elog(INFO, "BreakpointShowAll - %s", scope == BP_GLOBAL ? "global" : "local" );
@@ -1795,7 +1795,7 @@ BreakpointShowAll(eBreakpointScope scope)
 /* ------------------------------------------------------------
  * BreakpointCleanupProc()
  *
- * sequentially traverse the Global breakpoints hash table and 
+ * sequentially traverse the Global breakpoints hash table and
  * delete any breakpoints for the given process (identified by
  * its process ID).
  */
@@ -1811,11 +1811,11 @@ void BreakpointCleanupProc(int pid)
 	 */
 
 	acquireLock(BP_GLOBAL, LW_SHARED);
-	
+
 	hash_seq_init(&status, getBreakpointHash(BP_GLOBAL));
 
 	while((entry = (Breakpoint *) hash_seq_search(&status)))
-	{	
+	{
 		if( entry->data.proxyPid == pid )
 		{
 			entry = (Breakpoint *) hash_search(getBreakpointHash(BP_GLOBAL), &entry->key, HASH_REMOVE, NULL);
@@ -1863,9 +1863,9 @@ breakCountInsert(eBreakpointScope scope, BreakCountKey *key)
 {
 	BreakCount *entry;
 	bool		found;
-	
+
 	entry = hash_search(getBreakCountHash(scope), key, HASH_ENTER, &found);
-	
+
 	if (found)
 		entry->count++;
 	else
@@ -1881,18 +1881,18 @@ void
 breakCountDelete(eBreakpointScope scope, BreakCountKey *key)
 {
 	BreakCount		*entry;
-	
+
 	entry = hash_search(getBreakCountHash(scope), key, HASH_FIND, NULL);
-	
+
 	if (entry)
 	{
 		entry->count--;
-		
+
 		/* remove entry only if entry->count is zero */
 		if (entry->count == 0 )
 			hash_search(getBreakCountHash(scope), key, HASH_REMOVE, NULL);
 	}
-		
+
 }
 
 /* ---------------------------------------------------------
@@ -1903,12 +1903,12 @@ static int
 breakCountLookup(eBreakpointScope scope, BreakCountKey *key, bool *found)
 {
 	BreakCount		*entry;
-	
+
 	entry = hash_search(getBreakCountHash(scope), key, HASH_FIND, found);
-	
+
 	if (entry)
 		return entry->count;
-		
+
 	return -1;
 }
 

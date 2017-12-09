@@ -6,7 +6,7 @@
  *
  * Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
  *
- * Licensed under the Artistic License, see 
+ * Licensed under the Artistic License, see
  *		http://www.opensource.org/licenses/artistic-license.php
  * for full details
  */
@@ -21,7 +21,7 @@ typedef enum
 	BP_GLOBAL
 } eBreakpointScope;
 
-/* 
+/*
  * Stores information pertaining to a global breakpoint.
  */
 typedef struct BreakpointData
@@ -32,7 +32,7 @@ typedef struct BreakpointData
 	int			proxyPid;	/* process id of the proxy process */
 } BreakpointData;
 
-/* 
+/*
  * The key of the global breakpoints hash table. For now holds only have an Oid field.
  * but it may contain more fields in future.
  */
@@ -47,7 +47,7 @@ typedef struct BreakpointKey
 typedef struct Breakpoint
 {
 	BreakpointKey		key;
-	BreakpointData		data;		
+	BreakpointData		data;
 } Breakpoint;
 
 extern Breakpoint * BreakpointLookup(eBreakpointScope scope, BreakpointKey *key);

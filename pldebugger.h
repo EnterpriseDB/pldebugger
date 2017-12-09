@@ -4,7 +4,7 @@
 #include "globalbp.h"
 #include "storage/lwlock.h"
 
-/* 
+/*
  * We keep one per_session_ctx structure per backend. This structure holds all
  * of the stuff that we need to track from one function call to the next.
  */
@@ -21,9 +21,9 @@ extern per_session_ctx_t per_session_ctx;
 /*
  * errorHandlerCtx
  *
- *	We use setjmp() and longjmp() to handle network errors.  Because we want to 
- *  be able to stack setjmp()/longjmp() savepoints, we define a structure to 
- *  wrap sigjmp_buf's - we have to do that because sigjmp_buf is defined as an 
+ *	We use setjmp() and longjmp() to handle network errors.  Because we want to
+ *  be able to stack setjmp()/longjmp() savepoints, we define a structure to
+ *  wrap sigjmp_buf's - we have to do that because sigjmp_buf is defined as an
  *  array on some platforms (like Win32).
  */
 
@@ -34,7 +34,7 @@ typedef struct
 
 extern errorHandlerCtx client_lost;
 
-#define PLDBG_HELP				'?'	
+#define PLDBG_HELP				'?'
 #define PLDBG_CONTINUE			'c'
 #define PLDBG_SET_BREAKPOINT	   	'b'
 #define PLDBG_CLEAR_BREAKPOINT    'f'
@@ -94,12 +94,12 @@ extern debugger_language_t spl_debugger_lang;
 #endif
 
 #if PG_VERSION_NUM >= 110000
-    #ifndef TRUE
-        #define TRUE true
-    #endif
-    #ifndef FALSE
-        #define FALSE false
-    #endif
+	#ifndef TRUE
+		#define TRUE true
+	#endif
+	#ifndef FALSE
+		#define FALSE false
+	#endif
 #endif
 
 #endif
