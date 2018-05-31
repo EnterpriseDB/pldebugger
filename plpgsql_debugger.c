@@ -308,6 +308,9 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 		{
 			switch( estate->datums[i]->dtype )
 			{
+#if (PG_VERSION_NUM >= 110000)
+				case PLPGSQL_DTYPE_PROMISE:
+#endif
 				case PLPGSQL_DTYPE_VAR:
 				{
 					PLpgSQL_var * var = (PLpgSQL_var *) estate->datums[i];
@@ -364,7 +367,9 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 				case PLPGSQL_DTYPE_REC:
 				case PLPGSQL_DTYPE_RECFIELD:
 				case PLPGSQL_DTYPE_ARRAYELEM:
+#if (PG_VERSION_NUM < 110000)
 				case PLPGSQL_DTYPE_EXPR:
+#endif
 				{
 					/* FIXME: implement other types */
 					break;
@@ -509,6 +514,9 @@ find_datum_by_name(const PLpgSQL_execstate *frame, const char *var_name,
 
 			switch( datum->dtype )
 			{
+#if (PG_VERSION_NUM >= 110000)
+				case PLPGSQL_DTYPE_PROMISE:
+#endif
 				case PLPGSQL_DTYPE_VAR:
 				{
 					PLpgSQL_var * var = (PLpgSQL_var *) datum;
@@ -531,6 +539,9 @@ find_datum_by_name(const PLpgSQL_execstate *frame, const char *var_name,
 
 		switch( frame->datums[i]->dtype )
 		{
+#if (PG_VERSION_NUM >= 110000)
+			case PLPGSQL_DTYPE_PROMISE:
+#endif
 			case PLPGSQL_DTYPE_VAR:
 			case PLPGSQL_DTYPE_ROW:
 			case PLPGSQL_DTYPE_REC:
@@ -547,7 +558,9 @@ find_datum_by_name(const PLpgSQL_execstate *frame, const char *var_name,
 
 			case PLPGSQL_DTYPE_RECFIELD:
 			case PLPGSQL_DTYPE_ARRAYELEM:
+#if (PG_VERSION_NUM < 110000)
 			case PLPGSQL_DTYPE_EXPR:
+#endif
 #if (PG_VERSION_NUM <= 80400)
 			case PLPGSQL_DTYPE_TRIGARG:
 #endif
@@ -642,17 +655,32 @@ print_rec(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
 {
 	int		attNo;
 
+	TupleDesc	rec_tupdesc;
+	HeapTuple	tuple;
+
+#if (PG_VERSION_NUM >= 110000)
+	if (tgt->erh == NULL ||
+		ExpandedRecordIsEmpty(tgt->erh))
+		return;
+
+	rec_tupdesc = expanded_record_get_tupdesc(tgt->erh);
+	tuple = expanded_record_get_tuple(tgt->erh);
+#else
 	if (tgt->tupdesc == NULL)
 		return;
 
-	for( attNo = 0; attNo < tgt->tupdesc->natts; ++attNo )
-	{
-		char * extval = SPI_getvalue( tgt->tup, tgt->tupdesc, attNo + 1 );
+	rec_tupdesc = tgt->tupdesc;
+	tuple = tgt->tup;
+#endif
 
-#if PG_VERSION_NUM >= 110000
-		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( tgt->tupdesc->attrs[attNo].attname ), extval ? extval : "NULL" );
+	for( attNo = 0; attNo < rec_tupdesc->natts; ++attNo )
+	{
+		char * extval = SPI_getvalue( tuple, rec_tupdesc, attNo + 1 );
+
+#if (PG_VERSION_NUM >= 110000)
+		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( rec_tupdesc->attrs[attNo].attname ), extval ? extval : "NULL" );
 #else
-		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( tgt->tupdesc->attrs[attNo]->attname ), extval ? extval : "NULL" );
+		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( rec_tupdesc->attrs[attNo]->attname ), extval ? extval : "NULL" );
 #endif
 
 		if( extval )
@@ -684,6 +712,9 @@ plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
 
 	switch( generic->dtype )
 	{
+#if (PG_VERSION_NUM >= 110000)
+		case PLPGSQL_DTYPE_PROMISE:
+#endif
 		case PLPGSQL_DTYPE_VAR:
 			print_var( estate, var_name, lineno, (PLpgSQL_var *) generic );
 			break;
@@ -701,7 +732,9 @@ plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
 			break;
 
 		case PLPGSQL_DTYPE_ARRAYELEM:
+#if (PG_VERSION_NUM < 110000)
 		case PLPGSQL_DTYPE_EXPR:
+#endif
 			/**
 			 * FIXME::
 			 * Hmm..  Shall we print the values for expression/array element?
@@ -1059,15 +1092,17 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 
 	expr = (PLpgSQL_expr *) palloc0( sizeof( *expr ));
 
-	expr->dtype       	   = PLPGSQL_DTYPE_EXPR;
-	expr->dno              = -1;
-	expr->query            = select;
-	expr->plan   	       = NULL;
-#if (PG_VERSION_NUM <= 80400)
-	expr->plan_argtypes    = NULL;
-	expr->nparams          = 0;
+#if (PG_VERSION_NUM < 110000)
+	expr->dtype			= PLPGSQL_DTYPE_EXPR;
+	expr->dno			= -1;
 #endif
-	expr->expr_simple_expr = NULL;
+	expr->query			= select;
+	expr->plan			= NULL;
+#if (PG_VERSION_NUM <= 80400)
+	expr->plan_argtypes		= NULL;
+	expr->nparams			= 0;
+#endif
+	expr->expr_simple_expr		= NULL;
 
 	BeginInternalSubTransaction( NULL );
 
@@ -1115,14 +1150,16 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 	{
 		sprintf( select, "SELECT '%s'", value );
 
-		expr->dtype       	  = PLPGSQL_DTYPE_EXPR;
-		expr->dno              = -1;
-		expr->query            = select;
-		expr->plan   	      = NULL;
-		expr->expr_simple_expr = NULL;
+#if (PG_VERSION_NUM < 110000)
+		expr->dtype		= PLPGSQL_DTYPE_EXPR;
+		expr->dno		= -1;
+#endif
+		expr->query		= select;
+		expr->plan		= NULL;
+		expr->expr_simple_expr	= NULL;
 #if (PG_VERSION_NUM <= 80400)
-		expr->plan_argtypes    = NULL;
-		expr->nparams          = 0;
+		expr->plan_argtypes	= NULL;
+		expr->nparams		= 0;
 #endif
 
 		BeginInternalSubTransaction( NULL );
