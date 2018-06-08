@@ -658,7 +658,7 @@ print_rec(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
 	TupleDesc	rec_tupdesc;
 	HeapTuple	tuple;
 
-#if (PG_VERSION_NUM >= 110000)
+#if (PG_VERSION_NUM >= 110000) && !defined(INCLUDE_PACKAGE_SUPPORT)
 	if (tgt->erh == NULL ||
 		ExpandedRecordIsEmpty(tgt->erh))
 		return;
