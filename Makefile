@@ -38,6 +38,7 @@ endif
 # with the pldebugger directory being directly in the server source tree's
 # contrib directory, we need to tell the compiler where to find it.
 plpgsql_debugger.o: CFLAGS += -I$(top_builddir)/src/pl/plpgsql/src
+plpgsql_debugger.bc: CPPFLAGS += -I$(top_srcdir)/src/pl/plpgsql/src -I$(top_builddir)/src/pl/plpgsql/src
 
 ################################################################################
 ## If we're building against EnterpriseDB's Advanced Server, also build a
