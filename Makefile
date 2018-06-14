@@ -57,6 +57,7 @@ spl_debugger.c:  plpgsql_debugger.c
 	sed -e 's/plpgsql_/spl_/g' $(module_srcdir)plpgsql_debugger.c > spl_debugger.c
 
 spl_debugger.o: 	CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=1 -I$(top_builddir)/src/pl/edb-spl/src
+spl_debugger.bc:	CPPFLAGS += -I$(top_srcdir)/src/pl/plpgsql/src -I$(top_builddir)/src/pl/plpgsql/src
 
 # There's some tiny differences in plugin_debugger.c, if we're including SPL
 # language. Pass the INCLUDE_PACKAGE_SUPPORT flag to plugin_debugger.c too.
