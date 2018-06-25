@@ -79,7 +79,7 @@ declare
   createstmt text;
 begin
 
-  isedb = (SELECT version() LIKE 'EnterpriseDB%');
+  isedb = (SELECT version() LIKE '%EnterpriseDB%');
 
   createstmt := $create_stmt$
 

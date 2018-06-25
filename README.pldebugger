@@ -32,7 +32,7 @@ Installation
 
   CREATE EXTENSION pldbgapi;
 
-  (on server versions older than 9.1, you must instead run the pldbgapi--1.0.sql
+  (on server versions older than 9.1, you must instead run the pldbgapi--1.1.sql
   script directly using psql).
 
 

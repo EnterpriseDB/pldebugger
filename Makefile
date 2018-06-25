@@ -17,7 +17,7 @@ OBJS	   = plpgsql_debugger.o plugin_debugger.o dbgcomm.o pldbgapi.o
 ifdef INCLUDE_PACKAGE_SUPPORT
 OBJS += spl_debugger.o
 endif
-DATA       = pldbgapi--1.0.sql pldbgapi--unpackaged--1.0.sql
+DATA       = pldbgapi--1.1.sql pldbgapi--unpackaged--1.1.sql pldbgapi--1.0--1.1.sql
 DOCS	   = README.pldebugger
 
 # PGXS build needs PostgreSQL 9.2 or later. Earlier versions didn't install

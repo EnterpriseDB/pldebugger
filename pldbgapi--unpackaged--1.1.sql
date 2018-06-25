@@ -34,7 +34,7 @@ declare
   isedb bool;
 begin
 
-  isedb = (SELECT version() LIKE 'EnterpriseDB%');
+  isedb = (SELECT version() LIKE '%EnterpriseDB%');
 
   -- Add a couple of EDB specific functions
   IF isedb THEN

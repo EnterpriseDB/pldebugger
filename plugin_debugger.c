@@ -50,7 +50,7 @@
 
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
 
-#define	TARGET_PROTO_VERSION	"1.0"
+#define	TARGET_PROTO_VERSION	"1.1"
 
 /**********************************************************************
  * Type and structure definitions
