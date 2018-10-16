@@ -96,11 +96,11 @@ application client *----- libpq -------* Target backend
 Licence
 -------
 
-The pl/pgsql debugger API is released under the Artistic Licence.
+The pl/pgsql debugger API is released under the Artistic Licence v2.0.
 
-    http://www.opensource.org/licenses/artistic-license.php
+    https://opensource.org/licenses/artistic-license-2.0
 
-Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
+Copyright (c) 2004-2018 EnterpriseDB Corporation. All Rights Reserved.
 
 
 Contact

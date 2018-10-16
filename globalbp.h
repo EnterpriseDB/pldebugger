@@ -4,10 +4,10 @@
  *	This file defines the (shared-memory) structures used by the PL debugger
  *  to keep track of global breakpoints.
  *
- * Copyright (c) 2004-2017 EnterpriseDB Corporation. All Rights Reserved.
+ * Copyright (c) 2004-2018 EnterpriseDB Corporation. All Rights Reserved.
  *
- * Licensed under the Artistic License, see
- *		http://www.opensource.org/licenses/artistic-license.php
+ * Licensed under the Artistic License v2.0, see
+ *		https://opensource.org/licenses/artistic-license-2.0
  * for full details
  */
 #ifndef GLOBALBP_H
