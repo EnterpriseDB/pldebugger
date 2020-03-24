@@ -213,8 +213,12 @@ static void * readn( int peer, void * dst, size_t len )
 		if( bytesRead <= 0 && errno != EINTR )
 			handle_socket_error();
 
-		bytesRemaining -= bytesRead;
-		buffer         += bytesRead;
+		/* Ignore if we didn't receive anything. */
+		if ( bytesRead > 0 )
+		{
+			bytesRemaining -= bytesRead;
+			buffer += bytesRead;
+		}
 	}
 
 	return( dst );
