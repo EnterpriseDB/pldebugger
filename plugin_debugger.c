@@ -30,6 +30,9 @@
 #include "lib/stringinfo.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#if (PG_VERSION_NUM >= 130000)
+#include "common/hashfn.h"
+#endif
 #include "parser/parser.h"
 #include "parser/parse_func.h"
 #include "globalbp.h"

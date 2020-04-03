@@ -1184,7 +1184,7 @@ static void * readn( int serverHandle, void * dst, size_t len )
 		{
 			case -1:
 			{
-				ereport( ERROR, ( ERRCODE_CONNECTION_FAILURE, errmsg( "select() failed waiting for target" )));
+				ereport( ERROR, ( errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "select() failed waiting for target" )));
 				break;
 			}
 
@@ -1206,7 +1206,7 @@ static void * readn( int serverHandle, void * dst, size_t len )
 				 */
 
 				if( FD_ISSET( MyProcPort->sock, &rmask ))
-					ereport( ERROR, ( ERRCODE_CONNECTION_FAILURE, errmsg( "debugger connection(client side) terminated" )));
+					ereport( ERROR, ( errcode(ERRCODE_CONNECTION_FAILURE), errmsg( "debugger connection(client side) terminated" )));
 				break;
 			}
 		}
