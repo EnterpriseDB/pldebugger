@@ -366,7 +366,9 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 				case PLPGSQL_DTYPE_ROW:
 				case PLPGSQL_DTYPE_REC:
 				case PLPGSQL_DTYPE_RECFIELD:
+#if (PG_VERSION_NUM < 140000)
 				case PLPGSQL_DTYPE_ARRAYELEM:
+#endif
 #if (PG_VERSION_NUM < 110000)
 				case PLPGSQL_DTYPE_EXPR:
 #endif
@@ -557,7 +559,9 @@ find_datum_by_name(const PLpgSQL_execstate *frame, const char *var_name,
 			}
 
 			case PLPGSQL_DTYPE_RECFIELD:
+#if (PG_VERSION_NUM < 140000)
 			case PLPGSQL_DTYPE_ARRAYELEM:
+#endif
 #if (PG_VERSION_NUM < 110000)
 			case PLPGSQL_DTYPE_EXPR:
 #endif
@@ -731,7 +735,9 @@ plpgsql_print_var(ErrorContextCallback *frame, const char *var_name,
 			print_recfield( estate, var_name, lineno, (PLpgSQL_recfield *) generic );
 			break;
 
+#if (PG_VERSION_NUM < 140000)
 		case PLPGSQL_DTYPE_ARRAYELEM:
+#endif
 #if (PG_VERSION_NUM < 110000)
 		case PLPGSQL_DTYPE_EXPR:
 #endif
