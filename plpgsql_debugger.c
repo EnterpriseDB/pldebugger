@@ -83,6 +83,15 @@ typedef struct
 #endif
 } dbg_ctx;
 
+#define get_eval_mcontext(estate) \
+	((estate)->eval_econtext->ecxt_per_tuple_memory)
+#define eval_mcontext_alloc(estate, sz) \
+	MemoryContextAlloc(get_eval_mcontext(estate), sz)
+#define eval_mcontext_alloc0(estate, sz) \
+	MemoryContextAllocZero(get_eval_mcontext(estate), sz)
+
+#define NULL_DATUM "NULL"
+
 static void 		 dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func );
 static void 		 dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
 static void 		 initialize_plugin_info( PLpgSQL_execstate * estate, PLpgSQL_function * func );
@@ -362,7 +371,7 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 						variable->isconst ? 't':'f',
 						variable->notnull ? 't':'f',
 						typeid,
-						isNull? "NULL" : convert_value_to_string(estate, value, typeid));
+						isNull? NULL_DATUM : convert_value_to_string(estate, value, typeid));
 					break;
 				}
 			}
