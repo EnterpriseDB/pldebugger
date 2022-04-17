@@ -28,7 +28,7 @@ Replace X with your version
 
 > cd pldebugger/
 
-> git checkout print-vars-14
+> git checkout print-vars
 
 ## Install debugger
 
