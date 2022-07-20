@@ -114,6 +114,10 @@ static debugger_language_t *debugger_languages[] = {
 	NULL
 };
 
+#if (PG_VERSION_NUM >= 150000)
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+#endif
+
 /**********************************************************************
  * Function declarations
  **********************************************************************/
@@ -124,7 +128,10 @@ void _PG_init( void );				/* initialize this module when we are dynamically load
  * Local (hidden) function prototypes
  **********************************************************************/
 
-//static char       ** fetchArgNames( PLpgSQL_function * func, int * nameCount );
+#if (PG_VERSION_NUM >= 150000)
+static void			 pldebugger_shmem_request( void );
+#endif
+
 static void        * writen( int peer, void * src, size_t len );
 static bool 		 connectAsServer( void );
 static bool 		 connectAsClient( Breakpoint * breakpoint );
@@ -154,9 +161,25 @@ void _PG_init( void )
 	for (i = 0; debugger_languages[i] != NULL; i++)
 		debugger_languages[i]->initialize();
 
+#if (PG_VERSION_NUM >= 150000)
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = pldebugger_shmem_request;
+#else
+    reserveBreakpoints();
+    dbgcomm_reserve();
+#endif
+}
+
+#if (PG_VERSION_NUM >= 150000)
+static void pldebugger_shmem_request( void )
+{
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+
 	reserveBreakpoints();
 	dbgcomm_reserve();
 }
+#endif
 
 /*
  * CREATE OR REPLACE FUNCTION pldbg_oid_debug( functionOID OID ) RETURNS INTEGER AS 'pldbg_oid_debug' LANGUAGE C;
