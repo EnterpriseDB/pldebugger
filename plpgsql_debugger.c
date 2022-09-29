@@ -336,7 +336,7 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 #if 0
 				case PLPGSQL_DTYPE_ROW:
 #endif
-#if (PG_VERSION_NUM >= 120000)
+#if (PG_VERSION_NUM >= 130000)
 				case PLPGSQL_DTYPE_REC:
 				case PLPGSQL_DTYPE_RECFIELD:
 #endif
