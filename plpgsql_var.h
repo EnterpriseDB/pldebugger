@@ -16,7 +16,11 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 #include "parser/parse_type.h"
+#if (PG_VERSION_NUM >= 130000)
 #include "access/detoast.h"
+#elif (PG_VERSION_NUM >= 120000)
+#include "access/tuptoaster.h"
+#endif
 
 #define get_eval_mcontext(estate) \
 	((estate)->eval_econtext->ecxt_per_tuple_memory)
