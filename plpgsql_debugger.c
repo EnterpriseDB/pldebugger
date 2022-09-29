@@ -31,7 +31,6 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 #include "parser/parse_type.h"
-#include "access/detoast.h"
 
 #if INCLUDE_PACKAGE_SUPPORT
 #include "spl.h"
@@ -337,8 +336,11 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 #if 0
 				case PLPGSQL_DTYPE_ROW:
 #endif
+#if (PG_VERSION_NUM >= 120000)
 				case PLPGSQL_DTYPE_REC:
 				case PLPGSQL_DTYPE_RECFIELD:
+#endif
+
 #if (PG_VERSION_NUM < 140000)
 				case PLPGSQL_DTYPE_ARRAYELEM:
 #endif
@@ -357,6 +359,9 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 						variable->notnull ? 't':'f',
 						typeid,
 						isNull? NULL_DATUM : convert_value_to_string(estate, value, typeid));
+					break;
+				}
+				default: {
 					break;
 				}
 			}

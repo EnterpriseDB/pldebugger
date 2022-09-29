@@ -1,5 +1,6 @@
 #include "plpgsql_var.h"
 
+
 #if (PG_VERSION_NUM >= 130000)
 
 static void plpgsql_fulfill_promise(PLpgSQL_execstate *estate, PLpgSQL_var *var);
@@ -1033,9 +1034,12 @@ assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var,
 
 #else
 
-//===========================================================================
-//Starts 
-//===========================================================================
+static void plpgsql_fulfill_promise(PLpgSQL_execstate *estate, PLpgSQL_var *var);
+static void revalidate_rectypeid(PLpgSQL_rec *rec);
+static void instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec);
+static HeapTuple make_tuple_from_row(PLpgSQL_execstate *estate, PLpgSQL_row *row, TupleDesc tupdesc);
+static void assign_text_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, const char *str);
+static void assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, Datum newvalue, bool isnull, bool freeable);
 
 /*
  * exec_eval_datum				Get current value of a PLpgSQL_datum
@@ -1054,8 +1058,7 @@ assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var,
  * In some cases we have to palloc a return value, and in such cases we put
  * it into the estate's eval_mcontext.
  */
-static void
-exec_eval_datum(PLpgSQL_execstate *estate,
+void exec_eval_datum(PLpgSQL_execstate *estate,
 				PLpgSQL_datum *datum,
 				Oid *typeid,
 				int32 *typetypmod,
@@ -1204,8 +1207,7 @@ exec_eval_datum(PLpgSQL_execstate *estate,
  * and assign it to the variable.
  * The assignment automatically disarms the promise.
  */
-static void
-plpgsql_fulfill_promise(PLpgSQL_execstate *estate,
+static void plpgsql_fulfill_promise(PLpgSQL_execstate *estate,
 						PLpgSQL_var *var)
 {
 	MemoryContext oldcontext;
@@ -1374,8 +1376,7 @@ plpgsql_fulfill_promise(PLpgSQL_execstate *estate,
  * catalog lookup or two seems like a big deal.
  * ----------
  */
-static char *
-convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype)
+char * convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype)
 {
 	char	   *result;
 	MemoryContext oldcontext;
@@ -1393,8 +1394,7 @@ convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype)
 /*
  * Verify that a PLpgSQL_rec's rectypeid is up-to-date.
  */
-static void
-revalidate_rectypeid(PLpgSQL_rec *rec)
+static void revalidate_rectypeid(PLpgSQL_rec *rec)
 {
 	PLpgSQL_type *typ = rec->datatype;
 	TypeCacheEntry *typentry;
@@ -1466,8 +1466,7 @@ revalidate_rectypeid(PLpgSQL_rec *rec)
  * change the logical state of the record variable: it's still NULL.
  * However, now we'll have a tupdesc with which we can e.g. look up fields.
  */
-static void
-instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec)
+static void instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec)
 {
 	Assert(rec->erh == NULL);	/* else caller error */
 
@@ -1486,7 +1485,6 @@ instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec)
 												estate->datum_context);
 }
 
-
 /* ----------
  * make_tuple_from_row		Make a tuple from the values of a row object
  *
@@ -1496,8 +1494,7 @@ instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec)
  * may be left behind in eval_mcontext, too.
  * ----------
  */
-static HeapTuple
-make_tuple_from_row(PLpgSQL_execstate *estate,
+static HeapTuple make_tuple_from_row(PLpgSQL_execstate *estate,
 					PLpgSQL_row *row,
 					TupleDesc tupdesc)
 {
@@ -1540,8 +1537,7 @@ make_tuple_from_row(PLpgSQL_execstate *estate,
 /*
  * free old value of a text variable and assign new value from C string
  */
-static void
-assign_text_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, const char *str)
+static void assign_text_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, const char *str)
 {
 	assign_simple_var(estate, var, CStringGetTextDatum(str), false, true);
 }
@@ -1554,8 +1550,7 @@ assign_text_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, const char *str)
  * lest we do the release of the old value incorrectly (not to mention
  * the detoasting business).
  */
-static void
-assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var,
+static void assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var,
 				  Datum newvalue, bool isnull, bool freeable)
 {
 	Assert(var->dtype == PLPGSQL_DTYPE_VAR ||

@@ -20,6 +20,9 @@
 #include "access/detoast.h"
 #elif (PG_VERSION_NUM >= 120000)
 #include "access/tuptoaster.h"
+#else
+#include "access/tuptoaster.h"
+#include "access/htup_details.h"
 #endif
 
 #define get_eval_mcontext(estate) \
