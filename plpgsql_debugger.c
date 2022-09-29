@@ -129,8 +129,8 @@ static void plpgsql_send_cur_line(ErrorContextCallback *frame);
 static void 		plpgsql_fulfill_promise(PLpgSQL_execstate *estate, PLpgSQL_var *var);
 static void 		exec_eval_datum(PLpgSQL_execstate *estate, PLpgSQL_datum *datum, Oid *typeid, int32 *typetypmod, Datum *value, bool *isnull);
 static char 		*convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype);
-static void 		revalidate_rectypeid(PLpgSQL_rec *rec);
-static void 		instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec);
+//static void 		revalidate_rectypeid(PLpgSQL_rec *rec);
+//static void 		instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec);
 static HeapTuple 	make_tuple_from_row(PLpgSQL_execstate *estate, PLpgSQL_row *row, TupleDesc tupdesc);
 static void 		assign_text_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, const char *str);
 static void			assign_simple_var(PLpgSQL_execstate *estate, PLpgSQL_var *var, Datum newvalue, bool isnull, bool freeable);
@@ -340,6 +340,9 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 	{
 		if( is_var_visible( estate, i ))
 		{
+		   //if((estate->datums[i]->dtype==PLPGSQL_DTYPE_RECFIELD)||(estate->datums[i]->dtype==PLPGSQL_DTYPE_REC))
+		   //   continue;
+		
 			datum 			= (PLpgSQL_datum*) estate->datums[i];
 			variable 		= (PLpgSQL_variable*) estate->datums[i];
 			isArg 			= dbg_info->func->fn_nargs > 0 && i < dbg_info->func->fn_nargs; 
@@ -1640,8 +1643,15 @@ void exec_eval_datum(PLpgSQL_execstate *estate,
 				 */
 				if (erh == NULL)
 				{
-					instantiate_empty_record_variable(estate, rec);
-					erh = rec->erh;
+				    /* Treat uninstantiated record as a simple NULL */
+				    *value = (Datum) 0;
+				    *isnull = true;
+				    /* Report variable's declared type */
+				    *typeid = (Oid) 0; //rec->rectypeid;
+				    *typetypmod = -1;
+				    break;
+					//instantiate_empty_record_variable(estate, rec);
+					//erh = rec->erh;
 				}
 
 				/*
@@ -1856,103 +1866,103 @@ plpgsql_fulfill_promise(PLpgSQL_execstate *estate,
  * have one already.  It will be a child of stmt_mcontext_parent, which is
  * either the function's main context or a pushed-down outer stmt_mcontext.
  */
-static MemoryContext
-get_stmt_mcontext(PLpgSQL_execstate *estate)
-{
-	if (estate->stmt_mcontext == NULL)
-	{
-		estate->stmt_mcontext =
-			AllocSetContextCreate(estate->stmt_mcontext_parent,
-								  "PLpgSQL per-statement data",
-								  ALLOCSET_DEFAULT_SIZES);
-	}
-	return estate->stmt_mcontext;
-}
+//static MemoryContext
+//get_stmt_mcontext(PLpgSQL_execstate *estate)
+//{
+//	if (estate->stmt_mcontext == NULL)
+//	{
+//		estate->stmt_mcontext =
+//			AllocSetContextCreate(estate->stmt_mcontext_parent,
+//								  "PLpgSQL per-statement data",
+//								  ALLOCSET_DEFAULT_SIZES);
+//	}
+//	return estate->stmt_mcontext;
+//}
 
-static void instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec)
-{
-	Assert(rec->erh == NULL);	/* else caller error */
+//static void instantiate_empty_record_variable(PLpgSQL_execstate *estate, PLpgSQL_rec *rec)
+//{
+//	Assert(rec->erh == NULL);	/* else caller error */
+//
+//	/* If declared type is RECORD, we can't instantiate */
+//	if (rec->rectypeid == RECORDOID)
+//		ereport(ERROR,
+//				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+//				 errmsg("record \"%s\" is not assigned yet", rec->refname),
+//				 errdetail("The tuple structure of a not-yet-assigned record is indeterminate. :(")));
+//
+//	/* Make sure rec->rectypeid is up-to-date before using it */
+//	revalidate_rectypeid(rec);
+//
+//	/* OK, do it */
+//	rec->erh = make_expanded_record_from_typeid(rec->rectypeid, -1,
+//												estate->datum_context);
+//}
 
-	/* If declared type is RECORD, we can't instantiate */
-	if (rec->rectypeid == RECORDOID)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("record \"%s\" is not assigned yet", rec->refname),
-				 errdetail("The tuple structure of a not-yet-assigned record is indeterminate.")));
-
-	/* Make sure rec->rectypeid is up-to-date before using it */
-	revalidate_rectypeid(rec);
-
-	/* OK, do it */
-	rec->erh = make_expanded_record_from_typeid(rec->rectypeid, -1,
-												estate->datum_context);
-}
-
-static void revalidate_rectypeid(PLpgSQL_rec *rec)
-{
-	PLpgSQL_type *typ = rec->datatype;
-	TypeCacheEntry *typentry;
-
-	if (rec->rectypeid == RECORDOID)
-		return;					/* it's RECORD, so nothing to do */
-	Assert(typ != NULL);
-	if (typ->tcache &&
-		typ->tcache->tupDesc_identifier == typ->tupdesc_id)
-	{
-		/*
-		 * Although *typ is known up-to-date, it's possible that rectypeid
-		 * isn't, because *rec is cloned during each function startup from a
-		 * copy that we don't have a good way to update.  Hence, forcibly fix
-		 * rectypeid before returning.
-		 */
-		rec->rectypeid = typ->typoid;
-		return;
-	}
-
-	/*
-	 * typcache entry has suffered invalidation, so re-look-up the type name
-	 * if possible, and then recheck the type OID.  If we don't have a
-	 * TypeName, then we just have to soldier on with the OID we've got.
-	 */
-	if (typ->origtypname != NULL)
-	{
-		/* this bit should match parse_datatype() in pl_gram.y */
-		typenameTypeIdAndMod(NULL, typ->origtypname,
-							 &typ->typoid,
-							 &typ->atttypmod);
-	}
-
-	/* this bit should match build_datatype() in pl_comp.c */
-	typentry = lookup_type_cache(typ->typoid,
-								 TYPECACHE_TUPDESC |
-								 TYPECACHE_DOMAIN_BASE_INFO);
-	if (typentry->typtype == TYPTYPE_DOMAIN)
-		typentry = lookup_type_cache(typentry->domainBaseType,
-									 TYPECACHE_TUPDESC);
-	if (typentry->tupDesc == NULL)
-	{
-		/*
-		 * If we get here, user tried to replace a composite type with a
-		 * non-composite one.  We're not gonna support that.
-		 */
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("type %s is not composite",
-						format_type_be(typ->typoid))));
-	}
-
-	/*
-	 * Update tcache and tupdesc_id.  Since we don't support changing to a
-	 * non-composite type, none of the rest of *typ needs to change.
-	 */
-	typ->tcache = typentry;
-	typ->tupdesc_id = typentry->tupDesc_identifier;
-
-	/*
-	 * Update *rec, too.  (We'll deal with subsidiary RECFIELDs as needed.)
-	 */
-	rec->rectypeid = typ->typoid;
-}
+//static void revalidate_rectypeid(PLpgSQL_rec *rec)
+//{
+//	PLpgSQL_type *typ = rec->datatype;
+//	TypeCacheEntry *typentry;
+//
+//	if (rec->rectypeid == RECORDOID)
+//		return;					/* it's RECORD, so nothing to do */
+//	Assert(typ != NULL);
+//	if (typ->tcache &&
+//		typ->tcache->tupDesc_identifier == typ->tupdesc_id)
+//	{
+//		/*
+//		 * Although *typ is known up-to-date, it's possible that rectypeid
+//		 * isn't, because *rec is cloned during each function startup from a
+//		 * copy that we don't have a good way to update.  Hence, forcibly fix
+//		 * rectypeid before returning.
+//		 */
+//		rec->rectypeid = typ->typoid;
+//		return;
+//	}
+//
+//	/*
+//	 * typcache entry has suffered invalidation, so re-look-up the type name
+//	 * if possible, and then recheck the type OID.  If we don't have a
+//	 * TypeName, then we just have to soldier on with the OID we've got.
+//	 */
+//	if (typ->origtypname != NULL)
+//	{
+//		/* this bit should match parse_datatype() in pl_gram.y */
+//		typenameTypeIdAndMod(NULL, typ->origtypname,
+//							 &typ->typoid,
+//							 &typ->atttypmod);
+//	}
+//
+//	/* this bit should match build_datatype() in pl_comp.c */
+//	typentry = lookup_type_cache(typ->typoid,
+//								 TYPECACHE_TUPDESC |
+//								 TYPECACHE_DOMAIN_BASE_INFO);
+//	if (typentry->typtype == TYPTYPE_DOMAIN)
+//		typentry = lookup_type_cache(typentry->domainBaseType,
+//									 TYPECACHE_TUPDESC);
+//	if (typentry->tupDesc == NULL)
+//	{
+//		/*
+//		 * If we get here, user tried to replace a composite type with a
+//		 * non-composite one.  We're not gonna support that.
+//		 */
+//		ereport(ERROR,
+//				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+//				 errmsg("type %s is not composite",
+//						format_type_be(typ->typoid))));
+//	}
+//
+//	/*
+//	 * Update tcache and tupdesc_id.  Since we don't support changing to a
+//	 * non-composite type, none of the rest of *typ needs to change.
+//	 */
+//	typ->tcache = typentry;
+//	typ->tupdesc_id = typentry->tupDesc_identifier;
+//
+//	/*
+//	 * Update *rec, too.  (We'll deal with subsidiary RECFIELDs as needed.)
+//	 */
+//	rec->rectypeid = typ->typoid;
+//}
 
 
 static HeapTuple make_tuple_from_row(PLpgSQL_execstate *estate, PLpgSQL_row *row, TupleDesc tupdesc)
