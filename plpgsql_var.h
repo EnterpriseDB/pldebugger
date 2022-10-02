@@ -16,6 +16,7 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 #include "executor/spi.h"
+#include "parser/parse_type.h"
 
 #if (PG_VERSION_NUM >= 130000)
 #include "access/detoast.h"
