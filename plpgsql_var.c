@@ -1,5 +1,51 @@
 #include "plpgsql_var.h"
 
+//static void print_other(StringInfo stringInfo, PLpgSQL_execstate *estate, Datum value, Oid oid);
+
+static void spi_call(const char* call, StringInfo stringInfo, Datum value, Oid oid);
+
+static bool mustConvertToJSONB(Oid oid);
+
+void print_datum(StringInfo stringInfo, PLpgSQL_execstate *estate, Datum datumValue, Oid oid)
+{
+	if ( mustConvertToJSONB(oid) )
+	{
+		spi_call("SELECT to_jsonb($1)::TEXT;", stringInfo, datumValue, oid);
+	}
+	else
+	{
+		spi_call("SELECT $1::TEXT;", stringInfo, datumValue, oid);
+	}
+}
+
+static bool mustConvertToJSONB(Oid oid)
+{
+	HeapTuple	       typeTup;
+	Form_pg_type       typeStruct;
+	typeTup = SearchSysCache(TYPEOID, ObjectIdGetDatum( oid ), 0, 0, 0);
+	if(!HeapTupleIsValid(typeTup))
+	{
+		return false;
+	}
+	typeStruct = (Form_pg_type)GETSTRUCT( typeTup );
+	return strcmp(NameStr(typeStruct->typname), "record") == 0;
+}
+
+static void spi_call(const char* call, StringInfo stringInfo, Datum value, Oid oid) {
+	int ret;
+	Oid argsTypes[1] = {oid};
+	Datum argsValues[1] = {value};
+	SPI_connect();
+    ret = SPI_execute_with_args(call, 1, argsTypes, argsValues, NULL, true, 1);
+	if (ret > 0 && SPI_tuptable != NULL)
+    {
+        SPITupleTable *tuptable = SPI_tuptable;
+        TupleDesc tupdesc = tuptable->tupdesc;
+        HeapTuple tuple = tuptable->vals[0];
+		appendStringInfoString(stringInfo, SPI_getvalue(tuple, tupdesc, 1));
+    }
+	SPI_finish();
+}
 
 #if (PG_VERSION_NUM >= 130000)
 
@@ -161,20 +207,6 @@ void exec_eval_datum(PLpgSQL_execstate *estate,
 	}
 }
 
-char * convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype)
-{
-	char	   *result;
-	MemoryContext oldcontext;
-	Oid			typoutput;
-	bool		typIsVarlena;
-
-	oldcontext = MemoryContextSwitchTo(get_eval_mcontext(estate));
-	getTypeOutputInfo(valtype, &typoutput, &typIsVarlena);
-	result = OidOutputFunctionCall(typoutput, value);
-	MemoryContextSwitchTo(oldcontext);
-
-	return result;
-}
 
 /*
  * If the variable has an armed "promise", compute the promised value
@@ -334,8 +366,6 @@ static void plpgsql_fulfill_promise(PLpgSQL_execstate *estate,
 
 	MemoryContextSwitchTo(oldcontext);
 }
-
-
 
 static HeapTuple make_tuple_from_row(PLpgSQL_execstate *estate, PLpgSQL_row *row, TupleDesc tupdesc)
 {
@@ -614,37 +644,6 @@ void exec_eval_datum(PLpgSQL_execstate *estate,
 			elog(ERROR, "unrecognized dtype: %d", datum->dtype);
 	}
 }
-
-/* ----------
- * convert_value_to_string			Convert a non-null Datum to C string
- *
- * Note: the result is in the estate's eval_mcontext, and will be cleared
- * by the next exec_eval_cleanup() call.  The invoked output function might
- * leave additional cruft there as well, so just pfree'ing the result string
- * would not be enough to avoid memory leaks if we did not do it like this.
- * In most usages the Datum being passed in is also in that context (if
- * pass-by-reference) and so an exec_eval_cleanup() call is needed anyway.
- *
- * Note: not caching the conversion function lookup is bad for performance.
- * However, this function isn't currently used in any places where an extra
- * catalog lookup or two seems like a big deal.
- * ----------
- */
-char * convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype)
-{
-	char	   *result;
-	MemoryContext oldcontext;
-	Oid			typoutput;
-	bool		typIsVarlena;
-
-	oldcontext = MemoryContextSwitchTo(get_eval_mcontext(estate));
-	getTypeOutputInfo(valtype, &typoutput, &typIsVarlena);
-	result = OidOutputFunctionCall(typoutput, value);
-	MemoryContextSwitchTo(oldcontext);
-
-	return result;
-}
-
 
 /*
  * If the variable has an armed "promise", compute the promised value
@@ -1356,36 +1355,6 @@ static void plpgsql_fulfill_promise(PLpgSQL_execstate *estate,
 	}
 
 	MemoryContextSwitchTo(oldcontext);
-}
-
-/* ----------
- * convert_value_to_string			Convert a non-null Datum to C string
- *
- * Note: the result is in the estate's eval_mcontext, and will be cleared
- * by the next exec_eval_cleanup() call.  The invoked output function might
- * leave additional cruft there as well, so just pfree'ing the result string
- * would not be enough to avoid memory leaks if we did not do it like this.
- * In most usages the Datum being passed in is also in that context (if
- * pass-by-reference) and so an exec_eval_cleanup() call is needed anyway.
- *
- * Note: not caching the conversion function lookup is bad for performance.
- * However, this function isn't currently used in any places where an extra
- * catalog lookup or two seems like a big deal.
- * ----------
- */
-char * convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype)
-{
-	char	   *result;
-	MemoryContext oldcontext;
-	Oid			typoutput;
-	bool		typIsVarlena;
-
-	oldcontext = MemoryContextSwitchTo(get_eval_mcontext(estate));
-	getTypeOutputInfo(valtype, &typoutput, &typIsVarlena);
-	result = OidOutputFunctionCall(typoutput, value);
-	MemoryContextSwitchTo(oldcontext);
-
-	return result;
 }
 
 /*
