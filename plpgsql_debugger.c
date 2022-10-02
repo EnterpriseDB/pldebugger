@@ -310,24 +310,28 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 	PLpgSQL_datum		*datum;
 	PLpgSQL_variable 	*variable;
 
-	Datum 				value;
+	Datum 				datum_value;
 	Oid					typeid;
 	int32 				typetypmod;
 	bool 				isNull;
 	bool		  		isArg;
 	int       			i;
+	StringInfo 			stringInfo;
+	PLpgSQL_datum_type 	datumType;
 
-	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
-	dbg_ctx * dbg_info = (dbg_ctx *) estate->plugin_info;
+	PLpgSQL_execstate 	*estate = (PLpgSQL_execstate *) frame->arg;
+	dbg_ctx 			*dbg_info = (dbg_ctx *) estate->plugin_info;
 
 	for( i = 0; i < estate->ndatums; i++ )
 	{
 		if( is_var_visible( estate, i ))
 		{
-			datum 			= (PLpgSQL_datum*) estate->datums[i];
-			variable 		= (PLpgSQL_variable*) estate->datums[i];
-			isArg 			= dbg_info->func->fn_nargs > 0 && i < dbg_info->func->fn_nargs; 
-			switch( estate->datums[i]->dtype )
+			isNull = true;
+			datum = (PLpgSQL_datum*) estate->datums[i];
+			variable = (PLpgSQL_variable*) estate->datums[i];
+			isArg = dbg_info->func->fn_nargs > 0 && i < dbg_info->func->fn_nargs; 
+			datumType = estate->datums[i]->dtype;
+			switch( datumType )
 			{
 #if (PG_VERSION_NUM >= 110000)
 				case PLPGSQL_DTYPE_PROMISE:
@@ -348,8 +352,17 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 				case PLPGSQL_DTYPE_EXPR:
 #endif
 				{
-					exec_eval_datum(estate, datum, &typeid, &typetypmod, &value, &isNull);
 
+					exec_eval_datum(estate, datum, &typeid, &typetypmod, &datum_value, &isNull);			
+					stringInfo = makeStringInfo();
+					if (isNull)
+					{
+						appendStringInfoString(stringInfo, NULL_DATUM);
+					} 
+					else 
+					{
+						print_datum(stringInfo, estate, datum_value, typeid);
+					}
 					dbg_send("%s:%c:%d:%c:%c:%c:%d:%s",
 						variable->refname,
 						isArg ? 'A' : 'L',
@@ -358,7 +371,8 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 						variable->isconst ? 't':'f',
 						variable->notnull ? 't':'f',
 						typeid,
-						isNull? NULL_DATUM : convert_value_to_string(estate, value, typeid));
+						stringInfo->data);
+					pfree(stringInfo);
 					break;
 				}
 				default: {

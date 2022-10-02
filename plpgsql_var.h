@@ -15,7 +15,9 @@
 #include "utils/rel.h"
 #include "miscadmin.h"
 #include "funcapi.h"
+#include "executor/spi.h"
 #include "parser/parse_type.h"
+
 #if (PG_VERSION_NUM >= 130000)
 #include "access/detoast.h"
 #elif (PG_VERSION_NUM >= 120000)
@@ -39,8 +41,8 @@
 #include "plpgsql.h"
 #endif
 
-extern void 		exec_eval_datum(PLpgSQL_execstate *estate, PLpgSQL_datum *datum, Oid *typeid, int32 *typetypmod, Datum *value, bool *isnull);
+extern void exec_eval_datum(PLpgSQL_execstate *estate, PLpgSQL_datum *datum, Oid *typeid, int32 *typetypmod, Datum *value, bool *isnull);
 
-extern char 		*convert_value_to_string(PLpgSQL_execstate *estate, Datum value, Oid valtype);
+extern void print_datum(StringInfo stringInfo, PLpgSQL_execstate *estate, Datum datumValue, Oid oid);
 
 #endif
