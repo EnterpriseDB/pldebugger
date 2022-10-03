@@ -351,7 +351,11 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 					exec_eval_datum(estate, datum, &typeid, &typetypmod, &value, &isNull);
 
 					dbg_send("%s:%c:%d:%c:%c:%c:%d:%s",
-						variable->refname,
+						//variable->refname,
+						//If is field of record then output full name with name variable of the record.
+						(estate->datums[i]->dtype == PLPGSQL_DTYPE_RECFIELD) ?
+						    psprintf("%s.%s", ((PLpgSQL_rec *) (estate->datums[((PLpgSQL_recfield *) datum)->recparentno]))->refname, variable->refname) :
+						    variable->refname,
 						isArg ? 'A' : 'L',
 						variable->lineno,
 						dbg_info->symbols[i].duplicate_name ? 'f' : 't',
