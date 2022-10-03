@@ -316,7 +316,8 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 	bool 				isNull;
 	bool		  		isArg;
 	int       			i;
-	StringInfo 			stringInfo;
+	StringInfo 			nameString;
+	StringInfo 			valueString;
 	PLpgSQL_datum_type 	datumType;
 
 	PLpgSQL_execstate 	*estate = (PLpgSQL_execstate *) frame->arg;
@@ -353,30 +354,44 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 #endif
 				{
 
-					exec_eval_datum(estate, datum, &typeid, &typetypmod, &datum_value, &isNull);			
-					stringInfo = makeStringInfo();
+					exec_eval_datum(estate, datum, &typeid, &typetypmod, &datum_value, &isNull);
+
+					valueString = makeStringInfo();
+					nameString = makeStringInfo();
+					
 					if (isNull)
 					{
-						appendStringInfoString(stringInfo, NULL_DATUM);
+						appendStringInfoString(valueString, NULL_DATUM);
 					} 
 					else 
 					{
-						print_datum(stringInfo, estate, datum_value, typeid);
+						print_datum(valueString, estate, datum_value, typeid);
 					}
+
+					if (datumType == PLPGSQL_DTYPE_RECFIELD)
+					{
+						appendStringInfo(nameString, "%s.%s", 
+							((PLpgSQL_rec *) (estate->datums[((PLpgSQL_recfield *) datum)->recparentno]))->refname, 
+							variable->refname);
+					}
+					else 
+					{
+						appendStringInfoString(nameString, variable->refname);
+					}
+
 					dbg_send("%s:%c:%d:%c:%c:%c:%d:%s",
-						//variable->refname,
-						//If is field of record then output full name with name variable of the record.
-						(estate->datums[i]->dtype == PLPGSQL_DTYPE_RECFIELD) ?
-						    psprintf("%s.%s", ((PLpgSQL_rec *) (estate->datums[((PLpgSQL_recfield *) datum)->recparentno]))->refname, variable->refname) :
-						    variable->refname,
+						nameString->data,
 						isArg ? 'A' : 'L',
 						variable->lineno,
 						dbg_info->symbols[i].duplicate_name ? 'f' : 't',
 						variable->isconst ? 't':'f',
 						variable->notnull ? 't':'f',
 						typeid,
-						stringInfo->data);
-					pfree(stringInfo);
+						valueString->data);
+
+					pfree(valueString);
+					pfree(nameString);
+					
 					break;
 				}
 				default: {
