@@ -1,7 +1,5 @@
 #include "plpgsql_var.h"
 
-//static void print_other(StringInfo stringInfo, PLpgSQL_execstate *estate, Datum value, Oid oid);
-
 static void spi_call(const char* call, StringInfo stringInfo, Datum value, Oid oid);
 
 static bool mustConvertToJSONB(Oid oid);

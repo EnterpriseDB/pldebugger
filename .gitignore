@@ -2,3 +2,4 @@
 *.bc
 *.so
 .vscode
+vcpkg
