@@ -4,10 +4,11 @@
 name: Foundation-Security/Black Duck Scan (PUBLIC)
 
 on:
-  push:  
-    tags:        
-      - '**'          
+  push:
+    tags:
+      - '**'
   workflow_dispatch:
+  pull_request:
 
 jobs:
   Blackduck-Scan:
