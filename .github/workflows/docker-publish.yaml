@@ -15,14 +15,11 @@ jobs:
           - amd64
           - arm64
         version:
-          - 11
           - 12
           - 13
           - 14
           - 15
         exclude:
-          - platform: arm64
-            version: 11
           - platform: arm64
             version: 12
           - platform: arm64
