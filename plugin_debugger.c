@@ -185,7 +185,7 @@ static void pldebugger_shmem_request( void )
  * CREATE OR REPLACE FUNCTION pldbg_oid_debug( functionOID OID ) RETURNS INTEGER AS 'pldbg_oid_debug' LANGUAGE C;
  */
 
-Datum pldbg_oid_debug(PG_FUNCTION_ARGS);
+PGDLLEXPORT Datum pldbg_oid_debug(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(pldbg_oid_debug);
 
 Datum pldbg_oid_debug(PG_FUNCTION_ARGS)
