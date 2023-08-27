@@ -26,7 +26,7 @@ export PG_VERSION=15 && export PG_IMAGE=postgres-debugger && export DOCKER_USER=
 ### Create the manifest
 
 ```bash
-export PG_VERSION=15 && export PG_IMAGE=postgres-debugger && export DOCKER_USER=galien0xffffff/ \
+export PG_VERSION=14 && export PG_IMAGE=postgres-debugger && export DOCKER_USER=galien0xffffff/ \
 && docker manifest create "$DOCKER_USER$PG_IMAGE:$PG_VERSION" \
 --amend "$DOCKER_USER$PG_IMAGE:$PG_VERSION-amd64" \
 --amend "$DOCKER_USER$PG_IMAGE:$PG_VERSION-arm64"
