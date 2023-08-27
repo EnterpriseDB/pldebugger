@@ -1,4 +1,4 @@
-name: Docker image
+name: Docker image for multi-arch
 
 on:
   workflow_dispatch:
@@ -6,8 +6,13 @@ on:
       version:
         description: 'PostgreSQL version'
         required: true
-        default: 15
-        type: number
+        type: choice
+        options:
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
 
 env:
   PG_IMAGE: postgres-debugger
@@ -15,11 +20,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platform: 
-          - amd64
-          - arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -38,12 +38,41 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push to Docker Hub
+      - name: Build amd64 and push to Docker Hub
         uses: docker/build-push-action@v4
         with:
           context: docker
-          platforms: linux/${{ matrix.platform }}
+          platforms: linux/amd64
           build-args: TAG=${{ inputs.version }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-${{ matrix.platform }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-amd64
+
+      - name: Build arm64 and push to Docker Hub
+        if: inputs.version == '14' || inputs.version == '15'
+        uses: docker/build-push-action@v4
+        with:
+          context: docker
+          platforms: linux/arm64
+          build-args: TAG=${{ inputs.version }}
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-arm64
+      
+      - name: Create manifest for multi-arch
+        if: inputs.version == '14' || inputs.version == '15'
+        run: |
+          docker manifest creae ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }} \
+            --amend ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-amd64 \
+            --amend ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-arm64
+        
+      - name: Ceate manifest for single arch
+        if: inputs.version == '11' || inputs.version == '12' || inputs.version == '13'
+        run: |
+          docker manifest create ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }} \
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-amd64
+            
+      - name: Push manifest
+        run: |
+          docker manifest push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}
+
+    
 
