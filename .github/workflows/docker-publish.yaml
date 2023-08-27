@@ -1,13 +1,10 @@
-name: Docker image
+name: Docker image for multi-arch
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'PostgreSQL version'
-        required: true
-        default: 15
-        type: number
+  schedule:
+    #every month the 23rd at 6:23am
+    - cron: '23 6 23 * *'
 
 env:
   PG_IMAGE: postgres-debugger
@@ -17,15 +14,36 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        image:
+          - bullseye
+          - bookworm
         platform: 
-          - amd64
-          - arm64
+          - linux/amd64
+          - linux/amd64,linux/arm64
+        version:
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+        exclude:
+          - platform: linux/amd64,linux/arm64
+            version: 11
+          - platform: linux/amd64,linux/arm64
+            version: 12
+          - platform: linux/amd64,linux/arm64
+            version: 13
+          - platform: linux/amd64
+            version: 14
+          - platform: linux/amd64
+            version: 15
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           ref: print-vars
-
+          
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -38,12 +56,30 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push to Docker Hub
+      - name: Build and push bullseye
+        if: matrix.image == 'bullseye'
         uses: docker/build-push-action@v4
         with:
           context: docker
-          platforms: linux/${{ matrix.platform }}
-          build-args: TAG=${{ inputs.version }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+             TAG=${{ matrix.version }}
+             BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-${{ matrix.platform }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
 
+      - name: Build and push bookworm
+        if: matrix.image == 'bookworm'
+        uses: docker/build-push-action@v4
+        with:
+          context: docker
+          platforms: ${{ matrix.platform }}
+          build-args: |
+              TAG=${{ matrix.version }}
+              BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
+          push: true
+          tags: | 
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+
+  
