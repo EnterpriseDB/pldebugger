@@ -2,13 +2,6 @@ name: Build and Push Multiple Docker Images
 
 on:
   workflow_dispatch:
-    inputs:
-      PG_VERSION:
-        description: 'PostgreSQL version (13, 14, 15, etc.)'
-        required: true
-      PG_PLATFORM:
-        description: 'PostgreSQL platform (amd64 or arm64)'
-        required: true
 
 env:
   PG_IMAGE: postgres-debugger
@@ -19,7 +12,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        version: [13, 14, 15, 16]
+        version: [13, 14, 15]
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
