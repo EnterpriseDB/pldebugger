@@ -60,16 +60,16 @@ jobs:
       - name: Create manifest for multi-arch
         if: inputs.version == '14' || inputs.version == '15'
         run: |
-          docker manifest creae ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }} \
+          docker manifest create ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }} \
             --amend ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-amd64 \
             --amend ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-arm64
         
-      - name: Ceate manifest for single arch
+      - name: Ceate manifest for amd64
         if: inputs.version == '11' || inputs.version == '12' || inputs.version == '13'
         run: |
           docker manifest create ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }} \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-amd64
-            
+            --amend ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-amd64
+
       - name: Push manifest
         run: |
           docker manifest push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}
