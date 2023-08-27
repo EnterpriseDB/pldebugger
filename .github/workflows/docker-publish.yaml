@@ -12,17 +12,17 @@ jobs:
     strategy:
       matrix:
         platform: 
-          - amd64
-          - arm64
+          - linux/amd64
+          - linux/arm64
         version:
           - 12
           - 13
           - 14
           - 15
         exclude:
-          - platform: arm64
+          - platform: linux/amd64
             version: 12
-          - platform: arm64
+          - platform: linux/arm64
             version: 13
     steps:
       - name: Checkout code
