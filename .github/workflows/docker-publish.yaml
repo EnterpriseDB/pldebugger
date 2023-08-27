@@ -2,6 +2,12 @@ name: Build and Push Multiple Docker Images
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'PostgreSQL version'
+        required: true
+        default: 15
+        type: number
 
 env:
   PG_IMAGE: postgres-debugger
@@ -11,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [15]
         platform: 
           - linux/amd64
           - linux/arm64
@@ -38,6 +43,7 @@ jobs:
         with:
           context: docker
           platforms: ${{ matrix.platform }}
-          build-args: TAG=${{ matrix.version }}
+          build-args: TAG=${{ inputs.version }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-${{ matrix.platform }}
+
