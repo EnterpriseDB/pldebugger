@@ -18,8 +18,8 @@ jobs:
     strategy:
       matrix:
         platform: 
-          - linux/amd64
-          - linux/arm64
+          - amd64
+          - arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -42,7 +42,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: docker
-          platforms: ${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
           build-args: TAG=${{ inputs.version }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ inputs.version }}-${{ matrix.platform }}
