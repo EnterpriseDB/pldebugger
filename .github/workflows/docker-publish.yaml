@@ -11,27 +11,30 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [amd64, arm64]
-        version: [13, 14, 15]
+        version: [11, 12, 13, 14, 15]
+        platform: 
+          - linux/amd64
+          - linux/arm64
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        ref: print-vars
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: print-vars
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
 
-    - name: Go to Dockerfile directory
-      run: cd docker
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build Docker image
-      run: docker build --platform "linux/${{ matrix.platform }}" \
-        --build-arg "TAG=${{ matrix.version }}" \
-        --tag ${{ secrets.DOCKER_USERNAME }}/$PG_IMAGE:${{ matrix.version }}-${{ matrix.platform }} .
-
-    - name: Push Docker image to docker hub
-      run: docker push ${{ secrets.DOCKER_USERNAME }}/$PG_IMAGE:${{ matrix.version }}-${{ matrix.platform }} 
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: docker
+          platforms: ${{ matrix.platform }}
+          build-args: PG_VERSION=${{ matrix.version }}
+          push: true
+          tags: ${{ env.PG_IMAGE }}:${{ matrix.version }}
