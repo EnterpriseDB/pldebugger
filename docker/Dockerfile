@@ -1,8 +1,8 @@
 # Filename: Dockerfile
 
 #POSTGRES IMAGE
-ARG TAG=latest
-FROM postgres:${TAG}
+ARG BASE_IMAGE=latest
+FROM postgres:${BASE_IMAGE}
 
 # SET ENV
 ARG TAG
