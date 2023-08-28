@@ -1,6 +1,6 @@
 # Filename: Dockerfile
 
-#POSTGRES IMAGE
+#POSTGRES IMAGE 
 ARG BASE_IMAGE=latest
 FROM postgres:${BASE_IMAGE}
 
@@ -10,7 +10,7 @@ ENV PG_LIB=postgresql-server-dev-${TAG}
 ENV PG_BRANCH=REL_${TAG}_STABLE
 ENV PLUGIN_BRANCH=print-vars
 
-# APT
+# APT & BUILD
 RUN apt --yes update \
     && apt --yes upgrade \
     && apt --yes install git build-essential libreadline-dev zlib1g-dev bison libkrb5-dev flex $PG_LIB \

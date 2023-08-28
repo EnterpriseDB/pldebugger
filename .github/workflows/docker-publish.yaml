@@ -2,6 +2,9 @@ name: Docker image for multi-arch
 
 on:
   workflow_dispatch:
+  schedule:
+    #every month the 23rd at 6:23am
+    - cron: '23 6 23 * *'
 
 env:
   PG_IMAGE: postgres-debugger
@@ -11,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        image:
+          - bullseye
+          - bookworm
         platform: 
           - linux/amd64
           - linux/amd64,linux/arm64
@@ -56,7 +62,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: |
              TAG=${{ matrix.version }}
-             BASE_IMAGE=${{ matrix.version }}-bookworm
+             BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
   

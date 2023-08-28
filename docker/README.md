@@ -7,7 +7,7 @@
 
 * PG_VERSION: PostgreSQL version (from 11 to 15)
 * PG_PLATFORM: Target platform, tested on linux/amd64 and linux/arm64 (arm64 is supported from PostgreSQL 14)
-* BASE_IMAGE: Image name (11.21-bullseye for postgres:11.21-bullseye)
+* BASE_IMAGE: Image name (11-bookworm, ...)
 
 
 ```bash
