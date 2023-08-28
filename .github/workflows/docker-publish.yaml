@@ -8,7 +8,6 @@ on:
 
 env:
   PG_IMAGE: postgres-debugger
-  TAGS: 
 
 jobs:
   build-and-push:
@@ -49,14 +48,14 @@ jobs:
         run: |
           echo "Setting up tags for bullseye"
         env:
-          TAGS: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
-          
+          Hub_Tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
+
       - name: Add global tags for bookworm
         if: matrix.image == 'bookworm'
         run: |
           echo "Setting up tags for bookworm and adding to global tags"
         env:
-          TAGS: ${{ env.TAGS }},${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+          Hub_Tags: ${{ env.Hub_Tags }},${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
 
       - name: Checkout code
         uses: actions/checkout@v3
@@ -84,5 +83,5 @@ jobs:
              TAG=${{ matrix.version }}
              BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
-          tags: ${{ env.TAGS }}
+          tags: ${{ env.Hub_Tags }}
   
