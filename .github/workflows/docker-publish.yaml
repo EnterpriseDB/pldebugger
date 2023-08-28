@@ -13,16 +13,16 @@ jobs:
       matrix:
         platform: 
           - linux/amd64
-          - linux/arm64
+          - linux/amd64,linux/arm64
         version:
           - 12
           - 13
           - 14
           - 15
         exclude:
-          - platform: linux/amd64
+          - platform: linux/amd64,linux/arm64
             version: 12
-          - platform: linux/arm64
+          - platform: linux/amd64,linux/arm64
             version: 13
     steps:
       - name: Checkout code
