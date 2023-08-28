@@ -46,7 +46,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build amd64 and push to Docker Hub
+      - name: Build and push to Docker Hub
         uses: docker/build-push-action@v4
         with:
           context: docker
@@ -54,7 +54,4 @@ jobs:
           build-args: TAG=${{ matrix.version }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
-
-
-    
-
+  
