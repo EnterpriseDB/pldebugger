@@ -22,6 +22,8 @@ jobs:
           - 15
         exclude:
           - platform: linux/amd64,linux/arm64
+            version: 11
+          - platform: linux/amd64,linux/arm64
             version: 12
           - platform: linux/amd64,linux/arm64
             version: 13
@@ -52,7 +54,9 @@ jobs:
         with:
           context: docker
           platforms: ${{ matrix.platform }}
-          build-args: TAG=${{ matrix.version }} BASE_IMAGE=${{ matrix.version }}-bookworm
+          build-args: |
+             TAG=${{ matrix.version }}
+             BASE_IMAGE=${{ matrix.version }}-bookworm
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
   
