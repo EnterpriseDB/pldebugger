@@ -24,6 +24,10 @@ jobs:
             version: 12
           - platform: linux/amd64,linux/arm64
             version: 13
+          - platform: linux/amd64
+            version: 14
+          - platform: linux/amd64
+            version: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
