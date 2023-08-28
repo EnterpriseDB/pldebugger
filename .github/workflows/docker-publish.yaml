@@ -37,18 +37,13 @@ jobs:
             version: 14
           - platform: linux/amd64
             version: 15
-        include:
-          - image: bullseye
-            tag: 11
-          - platform: linux/amd64
-            version: 15
-    steps:
 
+    steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           ref: print-vars
-
+          
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -72,7 +67,7 @@ jobs:
              BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
-          
+
       - name: Build and push bookworm
         if: matrix.image == 'bookworm'
         uses: docker/build-push-action@v4
