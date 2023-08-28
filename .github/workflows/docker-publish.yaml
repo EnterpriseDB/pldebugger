@@ -8,6 +8,7 @@ on:
 
 env:
   PG_IMAGE: postgres-debugger
+  TAGS: 
 
 jobs:
   build-and-push:
@@ -37,7 +38,26 @@ jobs:
             version: 14
           - platform: linux/amd64
             version: 15
+        include:
+          - image: bullseye
+            tag: 11
+          - platform: linux/amd64
+            version: 15
     steps:
+
+      - name: Setup default tags
+        run: |
+          echo "Setting up tags for bullseye"
+        env:
+          TAGS: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
+          
+      - name: Add global tags for bookworm
+        if: matrix.image == 'bookworm'
+        run: |
+          echo "Setting up tags for bookworm and adding to global tags"
+        env:
+          TAGS: ${{ env.TAGS }},${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -55,7 +75,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push to Docker Hub
+      - name: Build and push
         uses: docker/build-push-action@v4
         with:
           context: docker
@@ -64,7 +84,5 @@ jobs:
              TAG=${{ matrix.version }}
              BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
+          tags: ${{ env.TAGS }}
   
