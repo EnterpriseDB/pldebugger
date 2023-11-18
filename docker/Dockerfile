@@ -19,11 +19,11 @@ RUN apt --yes update \
 RUN cd /usr/src/ \
     && git clone --progress -b $PG_BRANCH --single-branch https://github.com/postgres/postgres.git \
     && cd postgres \
-    && ./configure \
-    && cd /usr/src/postgres/contrib
+    && ./configure
 
 # INSTALL PLDEBUGGER
-RUN git clone -b $PLUGIN_BRANCH --single-branch https://github.com/ng-galien/pldebugger.git \
+RUN cd /usr/src/postgres/contrib \ 
+    && git clone -b $PLUGIN_BRANCH --single-branch https://github.com/ng-galien/pldebugger.git \
     && cd pldebugger \
     && make clean && make USE_PGXS=1 && make USE_PGXS=1 install \
     && rm -r /usr/src/postgres
