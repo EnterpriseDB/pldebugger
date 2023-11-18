@@ -66,8 +66,8 @@ jobs:
           context: docker
           platforms: ${{ matrix.platform }}
           build-args: |
-             TAG=${{ matrix.version }}
-             BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
+            TAG=${{ matrix.version }}
+            BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
 
@@ -78,8 +78,8 @@ jobs:
           context: docker
           platforms: ${{ matrix.platform }}
           build-args: |
-              TAG=${{ matrix.version }}
-              BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
+            TAG=${{ matrix.version }}
+            BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
           push: true
           tags: | 
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
