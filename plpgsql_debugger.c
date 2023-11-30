@@ -1124,8 +1124,6 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 		MemoryContextSwitchTo( curContext );
 		CurrentResourceOwner = curOwner;
 
-		SPI_restore_connection();
-
 		/* That worked, don't try again */
 		retval = true;
 	}
@@ -1139,8 +1137,6 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 		RollbackAndReleaseCurrentSubTransaction();
 		MemoryContextSwitchTo( curContext );
 		CurrentResourceOwner = curOwner;
-
-		SPI_restore_connection();
 
 		/* That failed - try again as a literal */
 		retval = false;
@@ -1182,8 +1178,6 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 			MemoryContextSwitchTo( curContext );
 			CurrentResourceOwner = curOwner;
 
-			SPI_restore_connection();
-
 			retval = true;
 		}
 		PG_CATCH();
@@ -1196,8 +1190,6 @@ plpgsql_do_deposit(ErrorContextCallback *frame, const char *var_name,
 			RollbackAndReleaseCurrentSubTransaction();
 			MemoryContextSwitchTo( curContext );
 			CurrentResourceOwner = curOwner;
-
-			SPI_restore_connection();
 
 			retval = false;
 		}
