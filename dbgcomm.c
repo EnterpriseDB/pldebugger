@@ -25,7 +25,6 @@
 #include <arpa/inet.h>
 
 #include "miscadmin.h"
-#include "storage/backendid.h"
 #include "storage/lwlock.h"
 #include "storage/pmsignal.h"
 #include "storage/shmem.h"
@@ -71,7 +70,7 @@
 
 typedef struct
 {
-	BackendId		backendid;
+	ProcNumber		backendid;
 	int			status;
 	int			pid;
 	int			port;
@@ -91,7 +90,7 @@ static dbgcomm_target_slot_t *dbgcomm_slots = NULL;
 static void dbgcomm_init(void);
 static uint32 resolveHostName(const char *hostName);
 static int findFreeTargetSlot(void);
-static int findTargetSlot(BackendId backendid);
+static int findTargetSlot(ProcNumber backendid);
 
 /**********************************************************************
  * Initialization routines
@@ -218,7 +217,7 @@ dbgcomm_connect_to_proxy(int proxyPort)
 	}
 	dbgcomm_slots[slot].port = ntohs(localaddr.sin_port);
 	dbgcomm_slots[slot].status = DBGCOMM_CONNECTING_TO_PROXY;
-	dbgcomm_slots[slot].backendid = MyBackendId;
+	dbgcomm_slots[slot].backendid = MyProcNumber;
 	dbgcomm_slots[slot].pid = MyProcPid;
 	LWLockRelease(getPLDebuggerLock());
 
@@ -322,12 +321,12 @@ dbgcomm_listen_for_proxy(void)
 	}
 	dbgcomm_slots[slot].port = localport;
 	dbgcomm_slots[slot].status = DBGCOMM_LISTENING_FOR_PROXY;
-	dbgcomm_slots[slot].backendid = MyBackendId;
+	dbgcomm_slots[slot].backendid = MyProcNumber;
 	dbgcomm_slots[slot].pid = MyProcPid;
 	LWLockRelease(getPLDebuggerLock());
 
 	/* Notify the client application that this backend is waiting for a proxy. */
-	elog(NOTICE, "PLDBGBREAK:%d", MyBackendId);
+	elog(NOTICE, "PLDBGBREAK:%d", MyProcNumber);
 
 	/* wait for the other end to connect to us */
 	done = false;
@@ -371,7 +370,7 @@ dbgcomm_listen_for_proxy(void)
  * that is open for communication. Uses ereport(ERROR) on error.
  */
 int
-dbgcomm_connect_to_target(BackendId targetBackend)
+dbgcomm_connect_to_target(ProcNumber targetBackend)
 {
 	int			sockfd;
 	struct sockaddr_in   remoteaddr = {0};
@@ -618,14 +617,14 @@ findFreeTargetSlot(void)
 	{
 		if (dbgcomm_slots[i].backendid == InvalidBackendId)
 			return i;
-		if (dbgcomm_slots[i].backendid == MyBackendId)
+		if (dbgcomm_slots[i].backendid == MyProcNumber)
 		{
 			/*
 			 * If we've failed to deallocate our slot earlier, reuse this slot.
 			 * This shouldn't happen.
 			 */
 			elog(LOG, "found leftover debugging target slot for backend %d",
-				 MyBackendId);
+				 MyProcNumber);
 			return i;
 		}
 	}
@@ -639,7 +638,7 @@ findFreeTargetSlot(void)
  * Note: Caller must be holding the lock.
  */
 static int
-findTargetSlot(BackendId backendid)
+findTargetSlot(ProcNumber backendid)
 {
 	int		i;
 

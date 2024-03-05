@@ -13,6 +13,11 @@
 #ifndef DBGCOMM_H
 #define DBGCOMM_H
 
+#if PG_VERSION_NUM < 170000
+#define MyProcNumber MyBackendId
+#define ProcNumber BackendId
+#endif
+
 extern void dbgcomm_reserve(void);
 
 extern int dbgcomm_connect_to_proxy(int proxyPort);
@@ -20,6 +25,6 @@ extern int dbgcomm_listen_for_proxy(void);
 
 extern int dbgcomm_listen_for_target(int *port);
 extern int dbgcomm_accept_target(int sockfd, int *targetPid);
-extern int dbgcomm_connect_to_target(BackendId targetBackend);
+extern int dbgcomm_connect_to_target(ProcNumber targetBackend);
 
 #endif
