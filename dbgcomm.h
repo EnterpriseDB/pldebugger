@@ -14,6 +14,7 @@
 #define DBGCOMM_H
 
 #if PG_VERSION_NUM < 170000
+#define INVALID_PROC_NUMBER InvalidBackendId
 #define MyProcNumber MyBackendId
 #define ProcNumber BackendId
 #endif

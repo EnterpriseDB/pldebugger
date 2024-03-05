@@ -127,7 +127,7 @@ dbgcomm_init(void)
 		int i;
 		for (i = 0; i < NumTargetSlots; i++)
 		{
-			dbgcomm_slots[i].backendid = InvalidBackendId;
+			dbgcomm_slots[i].backendid = INVALID_PROC_NUMBER;
 			dbgcomm_slots[i].status = DBGCOMM_IDLE;
 		}
 	}
@@ -238,7 +238,7 @@ dbgcomm_connect_to_proxy(int proxyPort)
 		 */
 		LWLockAcquire(getPLDebuggerLock(), LW_EXCLUSIVE);
 		dbgcomm_slots[slot].status = DBGCOMM_IDLE;
-		dbgcomm_slots[slot].backendid = InvalidBackendId;
+		dbgcomm_slots[slot].backendid = INVALID_PROC_NUMBER;
 		dbgcomm_slots[slot].port = 0;
 		LWLockRelease(getPLDebuggerLock());
 		return -1;
@@ -345,7 +345,7 @@ dbgcomm_listen_for_proxy(void)
 		if (dbgcomm_slots[slot].status == DBGCOMM_PROXY_CONNECTING &&
 			dbgcomm_slots[slot].port == ntohs(remoteaddr.sin_port))
 		{
-			dbgcomm_slots[slot].backendid = InvalidBackendId;
+			dbgcomm_slots[slot].backendid = INVALID_PROC_NUMBER;
 			dbgcomm_slots[slot].status = DBGCOMM_IDLE;
 			done = true;
 		}
@@ -615,7 +615,7 @@ findFreeTargetSlot(void)
 
 	for (i = 0; i < NumTargetSlots; i++)
 	{
-		if (dbgcomm_slots[i].backendid == InvalidBackendId)
+		if (dbgcomm_slots[i].backendid == INVALID_PROC_NUMBER)
 			return i;
 		if (dbgcomm_slots[i].backendid == MyProcNumber)
 		{
