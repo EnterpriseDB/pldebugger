@@ -13,6 +13,12 @@
 #ifndef DBGCOMM_H
 #define DBGCOMM_H
 
+#if (PG_VERSION_NUM >= 170000)
+#define BackendId ProcNumber
+#define MyBackendId MyProcNumber
+#define InvalidBackendId INVALID_PROC_NUMBER
+#endif
+
 extern void dbgcomm_reserve(void);
 
 extern int dbgcomm_connect_to_proxy(int proxyPort);

@@ -25,7 +25,9 @@
 #include <arpa/inet.h>
 
 #include "miscadmin.h"
+#if (PG_VERSION_NUM < 170000)
 #include "storage/backendid.h"
+#endif
 #include "storage/lwlock.h"
 #include "storage/pmsignal.h"
 #include "storage/shmem.h"
