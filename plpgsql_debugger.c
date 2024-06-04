@@ -25,7 +25,12 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
+#include "utils/lsyscache.h"
+#include "utils/datum.h"
+#include "utils/rel.h"
 #include "miscadmin.h"
+#include "funcapi.h"
+#include "parser/parse_type.h"
 
 #if INCLUDE_PACKAGE_SUPPORT
 #include "spl.h"
@@ -35,6 +40,7 @@
 #endif
 
 #include "pldebugger.h"
+#include "plpgsql_var.h"
 
 /* Include header for GETSTRUCT */
 #if (PG_VERSION_NUM >= 90300)
@@ -76,6 +82,8 @@ typedef struct
 	PLpgSQL_package   * package;
 #endif
 } dbg_ctx;
+
+#define NULL_DATUM "NULL"
 
 static void 		 dbg_startup( PLpgSQL_execstate * estate, PLpgSQL_function * func );
 static void 		 dbg_newstmt( PLpgSQL_execstate * estate, PLpgSQL_stmt * stmt );
@@ -298,74 +306,46 @@ varIsArgument(const PLpgSQL_execstate *estate, PLpgSQL_function *func,
 static void
 plpgsql_send_vars(ErrorContextCallback *frame)
 {
-	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) frame->arg;
-	dbg_ctx * dbg_info = (dbg_ctx *) estate->plugin_info;
-	int       i;
+	
+	PLpgSQL_datum		*datum;
+	PLpgSQL_variable 	*variable;
+
+	Datum 				datum_value;
+	Oid					typeid;
+	int32 				typetypmod;
+	bool 				isNull;
+	bool		  		isArg;
+	int       			i;
+	StringInfo 			nameString;
+	StringInfo 			valueString;
+	PLpgSQL_datum_type 	datumType;
+
+	PLpgSQL_execstate 	*estate = (PLpgSQL_execstate *) frame->arg;
+	dbg_ctx 			*dbg_info = (dbg_ctx *) estate->plugin_info;
 
 	for( i = 0; i < estate->ndatums; i++ )
 	{
 		if( is_var_visible( estate, i ))
 		{
-			switch( estate->datums[i]->dtype )
+			isNull = true;
+			datum = (PLpgSQL_datum*) estate->datums[i];
+			variable = (PLpgSQL_variable*) estate->datums[i];
+			isArg = dbg_info->func->fn_nargs > 0 && i < dbg_info->func->fn_nargs; 
+			datumType = estate->datums[i]->dtype;
+			switch( datumType )
 			{
 #if (PG_VERSION_NUM >= 110000)
 				case PLPGSQL_DTYPE_PROMISE:
 #endif
 				case PLPGSQL_DTYPE_VAR:
-				{
-					PLpgSQL_var * var = (PLpgSQL_var *) estate->datums[i];
-					char        * val;
-					char		* name = var->refname;
-					bool		  isArg;
-
-					isArg = varIsArgument(estate, dbg_info->func, i, &name);
-
-					if( datumIsNull((PLpgSQL_datum *)var ))
-						val = "NULL";
-					else
-						val = get_text_val( var, NULL, NULL );
-
-					dbg_send( "%s:%c:%d:%c:%c:%c:%d:%s",
-							  name,
-							  isArg ? 'A' : 'L',
-							  var->lineno,
-							  dbg_info->symbols[i].duplicate_name ? 'f' : 't',
-							  var->isconst ? 't':'f',
-							  var->notnull ? 't':'f',
-							  var->datatype ? var->datatype->typoid : InvalidOid,
-							  val );
-
-					break;
-				}
 #if 0
-			FIXME: implement other types
-
-				case PLPGSQL_DTYPE_REC:
-				{
-					PLpgSQL_rec * rec = (PLpgSQL_rec *) estate->datums[i];
-					int		      att;
-					char        * typeName;
-
-					if (rec->tupdesc != NULL)
-					{
-						for( att = 0; att < rec->tupdesc->natts; ++att )
-						{
-							typeName = SPI_gettype( rec->tupdesc, att + 1 );
-
-							dbg_send( "o:%s.%s:%d:%d:%d:%d:%s\n",
-									  rec->refname, NameStr( rec->tupdesc->attrs[att]->attname ),
-									  0, rec->lineno, 0, rec->tupdesc->attrs[att]->attnotnull, typeName ? typeName : "" );
-
-							if( typeName )
-								pfree( typeName );
-						}
-					}
-					break;
-				}
-#endif
 				case PLPGSQL_DTYPE_ROW:
+#endif
+#if (PG_VERSION_NUM >= 130000)
 				case PLPGSQL_DTYPE_REC:
 				case PLPGSQL_DTYPE_RECFIELD:
+#endif
+
 #if (PG_VERSION_NUM < 140000)
 				case PLPGSQL_DTYPE_ARRAYELEM:
 #endif
@@ -373,7 +353,48 @@ plpgsql_send_vars(ErrorContextCallback *frame)
 				case PLPGSQL_DTYPE_EXPR:
 #endif
 				{
-					/* FIXME: implement other types */
+
+					exec_eval_datum(estate, datum, &typeid, &typetypmod, &datum_value, &isNull);
+
+					valueString = makeStringInfo();
+					nameString = makeStringInfo();
+					
+					if (isNull)
+					{
+						appendStringInfoString(valueString, NULL_DATUM);
+					} 
+					else 
+					{
+						print_datum(valueString, estate, datum_value, typeid);
+					}
+
+					if (datumType == PLPGSQL_DTYPE_RECFIELD)
+					{
+						appendStringInfo(nameString, "%s.%s", 
+							((PLpgSQL_rec *) (estate->datums[((PLpgSQL_recfield *) datum)->recparentno]))->refname, 
+							variable->refname);
+					}
+					else 
+					{
+						appendStringInfoString(nameString, variable->refname);
+					}
+
+					dbg_send("%s:%c:%d:%c:%c:%c:%d:%s",
+						nameString->data,
+						isArg ? 'A' : 'L',
+						variable->lineno,
+						dbg_info->symbols[i].duplicate_name ? 'f' : 't',
+						variable->isconst ? 't':'f',
+						variable->notnull ? 't':'f',
+						typeid,
+						valueString->data);
+
+					pfree(valueString);
+					pfree(nameString);
+					
+					break;
+				}
+				default: {
 					break;
 				}
 			}
@@ -1523,3 +1544,4 @@ datumIsNull(PLpgSQL_datum *datum)
 
 	return false;
 }
+
