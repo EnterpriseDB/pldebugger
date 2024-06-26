@@ -33,11 +33,18 @@
             </PropertyGroup>
         </When>
         <Otherwise>
-            <PropertyGroup>
-                <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
-                <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
-                <MESON_XTRA_LDFLAGS>/defaultlib:$(PGBUILDPATH)\src\backend\$(postgres).lib</MESON_XTRA_LDFLAGS>
-            </PropertyGroup>
+            <When Condition="Exists('$(PGPATH)\Release\$(postgres)\$(postgres).lib')">
+                <PropertyGroup>
+                    <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
+                    <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
+                </PropertyGroup>
+	    </When>
+            <Otherwise>
+	        <PropertyGroup>
+                    <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
+                    <XTRA_LDFLAGS>/defaultlib:$(PGBUILDPATH)\src\backend\$(postgres).lib</XTRA_LDFLAGS>
+                </PropertyGroup>
+	    </Otherwise>
         </Otherwise>
     </Choose>
 
@@ -62,7 +69,7 @@
         <CFLAGS>/nologo /wd4273 /TC /LD $(XTRA_CFLAGS) /D "WIN32" /D "__WIN32__" $(XTRA_ARCH_CFLAGS) /D "_CRT_SECURE_NO_DEPRECATE" /D "_CRT_NONSTDC_NO_DEPRECATE" /D "_WINDLL" /D "_MBCS"</CFLAGS>
 
         <!-- Linker flags -->
-        <LDFLAGS>/DLL $(XTRA_LDFLAGS) $(MESON_XTRA_LDFLAGS) $(XTRA_ARCH_LDFLAGS) /defaultlib:user32 /defaultlib:netapi32 /defaultlib:advapi32 /defaultlib:shell32 /defaultlib:ws2_32 /defaultlib:Secur32.lib</LDFLAGS>
+        <LDFLAGS>/DLL $(XTRA_LDFLAGS) $(XTRA_ARCH_LDFLAGS) /defaultlib:user32 /defaultlib:netapi32 /defaultlib:advapi32 /defaultlib:shell32 /defaultlib:ws2_32 /defaultlib:Secur32.lib</LDFLAGS>
     </PropertyGroup>
 
     <ItemGroup>
