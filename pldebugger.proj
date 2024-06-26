@@ -33,18 +33,14 @@
             </PropertyGroup>
         </When>
         <Otherwise>
-            <When Condition="Exists('$(PGPATH)\Release\$(postgres)\$(postgres).lib')">
-                <PropertyGroup>
-                    <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
-                    <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
-                </PropertyGroup>
-	    </When>
-            <Otherwise>
-	        <PropertyGroup>
-                    <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
-                    <XTRA_LDFLAGS>/defaultlib:$(PGBUILDPATH)\src\backend\$(postgres).lib</XTRA_LDFLAGS>
-                </PropertyGroup>
-	    </Otherwise>
+            <PropertyGroup Condition="Exists('$(PGPATH)\Release\$(postgres)\$(postgres).lib')">
+                <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
+                <XTRA_LDFLAGS>/defaultlib:$(PGPATH)\Release\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
+            </PropertyGroup>
+	    <PropertyGroup Condition="Exists('$(PGBUILDPATH)\src\backend\$(postgres).lib')">
+                <XTRA_CFLAGS>/Ox /MD /GF</XTRA_CFLAGS>
+                <XTRA_LDFLAGS>/defaultlib:$(PGBUILDPATH)\src\backend\$(postgres).lib</XTRA_LDFLAGS>
+            </PropertyGroup>
         </Otherwise>
     </Choose>
 
