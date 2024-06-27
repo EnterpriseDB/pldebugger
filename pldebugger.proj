@@ -3,6 +3,7 @@
 
     <Target Name="all" DependsOnTargets="plugin_debugger" />
 
+    <Import Project="settings.projinc" />
 
     <!-- Detect if we're running against community PostgreSQL, or
 	 EnterpriseDB's Advanced Server. When building against EDB, we include
