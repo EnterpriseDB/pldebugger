@@ -28,9 +28,13 @@
     <!-- Setup for Debug or Release -->
     <Choose>
         <When Condition="'$(DEBUG)'=='1'">
-            <PropertyGroup>
+            <PropertyGroup Condition="Exists('$(PGPATH)\Debug\$(postgres)\$(postgres).lib')">
                 <XTRA_CFLAGS>/Od /MDd /Zi /D "DEBUG=1" /D "_DEBUG"</XTRA_CFLAGS>
                 <XTRA_LDFLAGS>/DEBUG /defaultlib:$(PGPATH)\Debug\$(postgres)\$(postgres).lib</XTRA_LDFLAGS>
+            </PropertyGroup>
+            <PropertyGroup Condition="Exists('$(PGBUILDPATH)\src\backend\$(postgres).lib')">
+                <XTRA_CFLAGS>/Od /MDd /Zi /D "DEBUG=1" /D "_DEBUG"</XTRA_CFLAGS>
+                <XTRA_LDFLAGS>/DEBUG /defaultlib:$(PGBUILDPATH)\src\backend\$(postgres).lib</XTRA_LDFLAGS>
             </PropertyGroup>
         </When>
         <Otherwise>
