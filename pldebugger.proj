@@ -81,6 +81,7 @@
         <IncludeDirs Include="/I$(PGPATH)\src\port" />
         <IncludeDirs Include="/I$(PGPATH)\src\pl\plpgsql\src" />
         <IncludeDirs Include="/I$(PGPATH)\src\pl\edb-spl\src" />
+        <IncludeDirs Include="/I$(PGBUILDPATH)\src\pl\edb-spl\src" />
         <IncludeDirs Include="/I$(GETTEXTPATH)\include" />
         <IncludeDirs Include="/I$(OPENSSLPATH)\include" />
         <IncludeDirs Include="/I$(KERBEROSPATH)\inc\krb5" />
