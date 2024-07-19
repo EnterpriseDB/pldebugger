@@ -3,7 +3,7 @@
  *
  * This file contains some helper functions for the proxy - target
  * communication.
- * Copyright (c) 2004-2018 EnterpriseDB Corporation. All Rights Reserved.
+ * Copyright (c) 2004-2024 EnterpriseDB Corporation. All Rights Reserved.
  *
  * Licensed under the Artistic License v2.0, see
  *		https://opensource.org/licenses/artistic-license-2.0

@@ -1,3 +1,4 @@
+-- uninstall_pldbgapi.sql
 --
 -- This script uninstalls the PL/PGSQL debugger API.
 --
@@ -6,6 +7,12 @@
 -- DROP EXTENSION command. This is still needed to uninstall on older
 -- versions, however.
 --
+-- Copyright (c) 2004-2024 EnterpriseDB Corporation. All Rights Reserved.
+--
+-- Licensed under the Artistic License v2.0, see 
+--		https://opensource.org/licenses/artistic-license-2.0
+-- for full details
+
 
 DROP FUNCTION pldbg_get_target_info(TEXT, "char");
 DROP FUNCTION pldbg_wait_for_target(INTEGER);

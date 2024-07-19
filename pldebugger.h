@@ -1,3 +1,15 @@
+/*
+ * pldebugger.h -
+ *
+ *	Main debugger header
+ *
+ * Copyright (c) 2004-2024 EnterpriseDB Corporation. All Rights Reserved.
+ *
+ * Licensed under the Artistic License v2.0, see
+ *		https://opensource.org/licenses/artistic-license-2.0
+ * for full details
+ */
+
 #ifndef PLDEBUGGER_H
 #define PLDEBUGGER_H
 

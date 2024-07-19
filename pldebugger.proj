@@ -1,3 +1,15 @@
+<!--
+  Visual Studio project for pl/debugger.
+
+  See settings.projinc for configurable options.
+
+  Copyright (c) 2004-2024 EnterpriseDB Corporation. All Rights Reserved.
+
+  Licensed under the Artistic License v2.0, see 
+ 		https://opensource.org/licenses/artistic-license-2.0
+  for full details
+-->
+
 <?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
 
