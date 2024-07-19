@@ -1,17 +1,18 @@
-<!--
-  Project level settings.
-  Can be overridden on the commandline by things like:
-  msbuild /p:PGPATH=C:\postgresql-8.3.0
-
-  Copyright (c) 2004-2024 EnterpriseDB Corporation. All Rights Reserved.
-
-  Licensed under the Artistic License v2.0, see 
- 		https://opensource.org/licenses/artistic-license-2.0
-  for full details
--->
-
 <?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="all">
+
+    <!--
+    Project level settings.
+    Can be overridden on the commandline by things like:
+    msbuild /p:PGPATH=C:\postgresql-8.3.0
+
+    Copyright (c) 2004-2024 EnterpriseDB Corporation. All Rights Reserved.
+
+    Licensed under the Artistic License v2.0, see 
+            https://opensource.org/licenses/artistic-license-2.0
+    for full details
+    -->
+
     <PropertyGroup>
     
         <!-- Debug build? -->
