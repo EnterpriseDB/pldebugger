@@ -18,7 +18,7 @@ ifdef INCLUDE_PACKAGE_SUPPORT
 OBJS += spl_debugger.o
 endif
 DATA       = pldbgapi--1.1.sql pldbgapi--unpackaged--1.1.sql pldbgapi--1.0--1.1.sql
-DOCS	   = README.pldebugger
+DOCS	   = README-pldebugger.md
 
 # PGXS build needs PostgreSQL 9.2 or later. Earlier versions didn't install
 # plpgsql.h, so you needed the full source tree to access it.
