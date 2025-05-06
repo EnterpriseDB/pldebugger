@@ -681,11 +681,7 @@ print_rec(const PLpgSQL_execstate *frame, const char *var_name, int lineno,
 	{
 		char * extval = SPI_getvalue( tuple, rec_tupdesc, attNo + 1 );
 
-#if (PG_VERSION_NUM >= 110000)
-		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( rec_tupdesc->attrs[attNo].attname ), extval ? extval : "NULL" );
-#else
-		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( rec_tupdesc->attrs[attNo]->attname ), extval ? extval : "NULL" );
-#endif
+		dbg_send( "v:%s.%s:%s\n", var_name, NameStr( TupleDescAttr(rec_tupdesc, attNo)->attname ), extval ? extval : "NULL" );
 
 		if( extval )
 			pfree( extval );
