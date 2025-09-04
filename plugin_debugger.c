@@ -1409,11 +1409,16 @@ initGlobalBreakpoints(void)
 #if (PG_VERSION_NUM >= 90600)
 	if (!found)
 	{
+#if (PG_VERSION_NUM >= 190000)
+		gbpd->tranche_id = LWLockNewTrancheId("pldebugger");
+#else
 		gbpd->tranche_id = LWLockNewTrancheId();
+#endif
 		LWLockInitialize(&gbpd->lock, gbpd->tranche_id);
 	}
 	{
-#if (PG_VERSION_NUM >= 100000)
+#if (PG_VERSION_NUM >= 190000)
+#elif (PG_VERSION_NUM >= 100000)
 		LWLockRegisterTranche(gbpd->tranche_id, "pldebugger");
 #else
 		static LWLockTranche tranche;
