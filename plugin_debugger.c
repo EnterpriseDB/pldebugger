@@ -1439,7 +1439,11 @@ initGlobalBreakpoints(void)
 	breakpointCtl.entrysize = sizeof(Breakpoint);
 	breakpointCtl.hash 	  	= tag_hash;
 
+#if PG_VERSION_NUM >= 190000
+	globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
+#else
 	globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
+#endif
 
 	if (!globalBreakpoints)
 		elog(FATAL, "could not initialize global breakpoints hash table");
@@ -1451,7 +1455,11 @@ initGlobalBreakpoints(void)
 	breakcountCtl.entrysize = sizeof(BreakCount);
 	breakcountCtl.hash    	= tag_hash;
 
+#if PG_VERSION_NUM >= 190000
+	globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
+#else
 	globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
+#endif
 
 	if (!globalBreakCounts)
 		elog(FATAL, "could not initialize global breakpoints count hash table");
