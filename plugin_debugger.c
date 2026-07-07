@@ -1409,11 +1409,17 @@ initGlobalBreakpoints(void)
 #if (PG_VERSION_NUM >= 90600)
 	if (!found)
 	{
+#if (PG_VERSION_NUM >= 190000)
+		gbpd->tranche_id = LWLockNewTrancheId("pldebugger");
+#else
 		gbpd->tranche_id = LWLockNewTrancheId();
+#endif
 		LWLockInitialize(&gbpd->lock, gbpd->tranche_id);
 	}
 	{
-#if (PG_VERSION_NUM >= 100000)
+#if (PG_VERSION_NUM >= 190000)
+		/* PG19+: tranche name passed to LWLockNewTrancheId(); no registration */
+#elif (PG_VERSION_NUM >= 100000)
 		LWLockRegisterTranche(gbpd->tranche_id, "pldebugger");
 #else
 		static LWLockTranche tranche;
@@ -1439,7 +1445,11 @@ initGlobalBreakpoints(void)
 	breakpointCtl.entrysize = sizeof(Breakpoint);
 	breakpointCtl.hash 	  	= tag_hash;
 
+#if (PG_VERSION_NUM >= 190000)
+	globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
+#else
 	globalBreakpoints = ShmemInitHash("Global Breakpoints Table", tableEntries, tableEntries, &breakpointCtl, HASH_ELEM | HASH_FUNCTION);
+#endif
 
 	if (!globalBreakpoints)
 		elog(FATAL, "could not initialize global breakpoints hash table");
@@ -1451,7 +1461,11 @@ initGlobalBreakpoints(void)
 	breakcountCtl.entrysize = sizeof(BreakCount);
 	breakcountCtl.hash    	= tag_hash;
 
+#if (PG_VERSION_NUM >= 190000)
+	globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
+#else
 	globalBreakCounts = ShmemInitHash("Global BreakCounts Table", tableEntries, tableEntries, &breakcountCtl, HASH_ELEM | HASH_FUNCTION);
+#endif
 
 	if (!globalBreakCounts)
 		elog(FATAL, "could not initialize global breakpoints count hash table");
