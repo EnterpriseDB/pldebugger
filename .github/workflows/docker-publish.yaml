@@ -1,0 +1,99 @@
+name: Publish Docker images
+
+on:
+  workflow_dispatch:
+  schedule:
+    #every month the 23rd at 6:23am
+    - cron: '23 6 23 * *'
+
+env:
+  PG_IMAGE: postgres-debugger
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        image:
+          - bookworm
+          - trixie
+        platform:
+          - linux/amd64,linux/arm64
+        version:
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4.5.1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Build and push bookworm
+        if: matrix.image == 'bookworm'
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            TAG=${{ matrix.version }}
+            BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
+          cache-from: type=gha,scope=publish-${{ matrix.image }}-pg${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=publish-${{ matrix.image }}-pg${{ matrix.version }}
+
+      - name: Build and push trixie
+        if: matrix.image == 'trixie'
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            TAG=${{ matrix.version }}
+            BASE_IMAGE=${{ matrix.version }}-${{ matrix.image }}
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}-${{ matrix.image }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.PG_IMAGE }}:${{ matrix.version }}
+          cache-from: type=gha,scope=publish-${{ matrix.image }}-pg${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=publish-${{ matrix.image }}-pg${{ matrix.version }}
+
+  # GitHub disables scheduled workflows after 60 days without repository
+  # activity; this resets the counter on every monthly run.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Keep scheduled workflow enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/docker-publish.yaml/enable"

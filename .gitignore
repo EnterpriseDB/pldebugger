@@ -1,3 +1,69 @@
+# Compiled extension and object files
 *.o
+*.bc
 *.so
 *.dll
+*.dylib
+*.a
+*.lib
+*.exp
+*.pdb
+
+# Generated EnterpriseDB SPL source
+spl_debugger.c
+
+# PostgreSQL regression output
+regression.diffs
+regression.out
+results/
+
+# Build directories
+build/
+cmake-build-*/
+Debug/
+Release/
+x64/
+x86/
+vcpkg/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IntelliJ-based IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Local AI assistant state
+.claude/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+.#*
+\#*\#
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Operating system metadata
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini

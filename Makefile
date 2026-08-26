@@ -13,7 +13,7 @@
 EXTENSION  = pldbgapi
 MODULE_big = plugin_debugger
 
-OBJS	   = plpgsql_debugger.o plugin_debugger.o dbgcomm.o pldbgapi.o
+OBJS	   = plpgsql_var.o plpgsql_debugger.o plugin_debugger.o dbgcomm.o pldbgapi.o
 ifdef INCLUDE_PACKAGE_SUPPORT
 OBJS += spl_debugger.o
 endif

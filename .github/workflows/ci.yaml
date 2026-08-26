@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - print-vars
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke-test:
+    name: PostgreSQL ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        postgres:
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Build test image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          push: false
+          tags: pldebugger-ci:${{ matrix.postgres }}
+          build-args: |
+            TAG=${{ matrix.postgres }}
+            BASE_IMAGE=${{ matrix.postgres }}-bookworm
+          cache-from: type=gha,scope=ci-pg${{ matrix.postgres }}
+          cache-to: type=gha,mode=max,scope=ci-pg${{ matrix.postgres }}
+
+      - name: Load extension and query proxy API
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          container="pldebugger-ci-${{ matrix.postgres }}"
+          cleanup() {
+            docker rm --force "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --env POSTGRES_PASSWORD=postgres \
+            "pldebugger-ci:${{ matrix.postgres }}"
+
+          ready=false
+          for attempt in {1..30}; do
+            if docker exec "$container" pg_isready --username postgres; then
+              ready=true
+              break
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' "$container")" != true ]]; then
+              docker logs "$container"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [[ "$ready" != true ]]; then
+            docker logs "$container"
+            exit 1
+          fi
+
+          docker exec --interactive "$container" \
+            psql --no-psqlrc --set ON_ERROR_STOP=1 \
+              --username postgres --dbname postgres <<'SQL'
+          CREATE EXTENSION pldbgapi;
+
+          DO $$
+          DECLARE
+            api_version integer;
+          BEGIN
+            IF position(
+              'plugin_debugger'
+              IN current_setting('shared_preload_libraries')
+            ) = 0 THEN
+              RAISE EXCEPTION 'plugin_debugger was not preloaded';
+            END IF;
+
+            SELECT proxyapiver
+              INTO api_version
+              FROM pldbg_get_proxy_info();
+
+            IF api_version <> 3 THEN
+              RAISE EXCEPTION 'unexpected proxy API version: %', api_version;
+            END IF;
+          END
+          $$;
+          SQL

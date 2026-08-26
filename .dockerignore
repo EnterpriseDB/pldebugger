@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+CLAUDE.md
+
+*.bc
+*.dll
+*.o
+*.so
+
+docker/README.md
