@@ -79,7 +79,7 @@
 
     <PropertyGroup>
         <!-- Compiler flags -->
-        <CFLAGS>/nologo /wd4273 /TC /LD $(XTRA_CFLAGS) /D "WIN32" /D "__WIN32__" $(XTRA_ARCH_CFLAGS) /D "_CRT_SECURE_NO_DEPRECATE" /D "_CRT_NONSTDC_NO_DEPRECATE" /D "_WINDLL" /D "_MBCS"</CFLAGS>
+        <CFLAGS>/nologo /wd4273 /TC /std:c17 /LD $(XTRA_CFLAGS) /D "WIN32" /D "__WIN32__" $(XTRA_ARCH_CFLAGS) /D "_CRT_SECURE_NO_DEPRECATE" /D "_CRT_NONSTDC_NO_DEPRECATE" /D "_WINDLL" /D "_MBCS"</CFLAGS>
 
         <!-- Linker flags -->
         <LDFLAGS>/DLL $(XTRA_LDFLAGS) $(XTRA_ARCH_LDFLAGS) /defaultlib:user32 /defaultlib:netapi32 /defaultlib:advapi32 /defaultlib:shell32 /defaultlib:ws2_32 /defaultlib:Secur32.lib</LDFLAGS>
